@@ -3,19 +3,25 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Trajectory } from "@/types";
 import { Button } from "@/components/ui/button";
-import { Maximize2, Minimize2, Layers, Play, Pause, RotateCcw, ZoomIn, Flame } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Maximize2, Minimize2, Layers, Play, Pause, RotateCcw, ZoomIn, Flame, Radio } from "lucide-react";
 import { toast } from "sonner";
+import { useRealtimeTelemetry } from "@/hooks/useRealtimeTelemetry";
+import type { LiveVessel } from "@/services/realtime";
 
 interface TrajectoryMapProps {
   trajectories: Trajectory[];
   onTrajectorySelect?: (trajectory: Trajectory) => void;
+  liveMode?: boolean;
 }
 
-const TrajectoryMap = ({ trajectories, onTrajectorySelect }: TrajectoryMapProps) => {
+const TrajectoryMap = ({ trajectories, onTrajectorySelect, liveMode = false }: TrajectoryMapProps) => {
+  const { liveVessels, isConnected } = useRealtimeTelemetry(liveMode);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
   const heatLayerRef = useRef<L.LayerGroup | null>(null);
+  const liveMarkersRef = useRef<Map<number, L.CircleMarker>>(new Map());
   const animationRef = useRef<number | null>(null);
   
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -54,8 +60,60 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect }: TrajectoryMapProps)
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
+      liveMarkersRef.current.clear();
     };
   }, []);
+
+  // Handle live vessel updates
+  useEffect(() => {
+    if (!liveMode || !mapInstanceRef.current || liveVessels.length === 0) return;
+
+    requestAnimationFrame(() => {
+      liveVessels.forEach((vessel: LiveVessel) => {
+        let marker = liveMarkersRef.current.get(vessel.mmsi);
+        
+        if (!marker) {
+          marker = L.circleMarker([vessel.lat, vessel.lon], {
+            radius: 8,
+            fillColor: '#ef4444',
+            color: '#fff',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.9,
+          }).addTo(mapInstanceRef.current!);
+          
+          marker.bindPopup(`
+            <div class="text-sm">
+              <strong class="text-primary">LIVE: MMSI ${vessel.mmsi}</strong><br/>
+              Speed: ${vessel.speed?.toFixed(1) || 'N/A'} kts<br/>
+              Course: ${vessel.course?.toFixed(0) || 'N/A'}°<br/>
+              Position: ${vessel.lat.toFixed(4)}, ${vessel.lon.toFixed(4)}
+            </div>
+          `);
+          
+          liveMarkersRef.current.set(vessel.mmsi, marker);
+        } else {
+          marker.setLatLng([vessel.lat, vessel.lon]);
+          marker.setPopupContent(`
+            <div class="text-sm">
+              <strong class="text-primary">LIVE: MMSI ${vessel.mmsi}</strong><br/>
+              Speed: ${vessel.speed?.toFixed(1) || 'N/A'} kts<br/>
+              Course: ${vessel.course?.toFixed(0) || 'N/A'}°<br/>
+              Position: ${vessel.lat.toFixed(4)}, ${vessel.lon.toFixed(4)}
+            </div>
+          `);
+        }
+      });
+    });
+  }, [liveVessels, liveMode]);
+
+  // Clear live markers when live mode is disabled
+  useEffect(() => {
+    if (!liveMode) {
+      liveMarkersRef.current.forEach(marker => marker.remove());
+      liveMarkersRef.current.clear();
+    }
+  }, [liveMode]);
 
   // Toggle fullscreen
   const toggleFullscreen = () => {
@@ -355,6 +413,16 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect }: TrajectoryMapProps)
 
       {/* Map Controls */}
       <div className="absolute top-3 right-3 flex flex-col gap-2 z-[1000] animate-fade-in">
+        {liveMode && (
+          <Badge 
+            variant={isConnected ? "destructive" : "secondary"}
+            className={`shadow-lg backdrop-blur-sm ${isConnected ? 'animate-pulse' : ''}`}
+          >
+            <Radio className="w-3 h-3 mr-1" />
+            {isConnected ? 'LIVE' : 'OFFLINE'}
+          </Badge>
+        )}
+        
         <Button
           size="sm"
           variant="secondary"

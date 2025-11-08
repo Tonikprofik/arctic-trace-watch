@@ -5,12 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, CheckCircle2, XCircle, Activity, Map as MapIcon, Brain, Search, Filter } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Activity, Map as MapIcon, Brain, Search, Filter, Radio } from "lucide-react";
 import { queryAgent, approveHitl } from "@/api/api";
 import type { QueryResponse, Trajectory } from "@/types";
 import { toast } from "sonner";
 import ActivityFeed from "@/components/ActivityFeed";
 import TrajectoryMap from "@/components/TrajectoryMap";
+import { LiveProducer } from "@/components/LiveProducer";
 import { saveQuery, updateQueryApproval } from "@/services/queryHistory";
 import { analyzeThreats } from "@/services/aiAnalysis";
 
@@ -29,6 +30,7 @@ const Dashboard = () => {
   const [trajectorySort, setTrajectorySort] = useState<string>("mmsi");
   const [shipTypeFilter, setShipTypeFilter] = useState<string>("all");
   const [traceSearch, setTraceSearch] = useState("");
+  const [liveMode, setLiveMode] = useState(false);
 
   const handleQuery = async () => {
     if (!prompt.trim()) {
@@ -276,12 +278,20 @@ const Dashboard = () => {
           <Card className="glass border-primary/30 shadow-xl glow-sm animate-fade-in">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-semibold text-primary flex items-center gap-2">
-                  <Brain className="h-5 w-5" />
-                  XAI Reasoning Trace
-                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-lg font-semibold text-primary flex items-center gap-2">
+                    <Brain className="h-5 w-5" />
+                    XAI Reasoning Trace
+                  </CardTitle>
+                  {liveMode && (
+                    <Badge variant="destructive" className="animate-pulse">
+                      <Radio className="w-3 h-3 mr-1" />
+                      LIVE
+                    </Badge>
+                  )}
+                </div>
                 <Badge variant="outline" className="font-mono text-xs px-2 py-1 bg-primary/10 border-primary/30 text-primary">
-                  Live
+                  Explainable AI
                 </Badge>
               </div>
               <CardDescription className="text-sm">Explainable AI decision pathway</CardDescription>
@@ -383,8 +393,23 @@ const Dashboard = () => {
                   <Badge variant="outline" className="font-mono text-xs">
                     {response.data.length} vessel{response.data.length !== 1 ? "s" : ""}
                   </Badge>
+                  {liveMode && (
+                    <Badge variant="destructive" className="animate-pulse">
+                      <Radio className="w-3 h-3 mr-1" />
+                      LIVE
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex gap-2">
+                  <Button
+                    variant={liveMode ? "destructive" : "outline"}
+                    size="sm"
+                    onClick={() => setLiveMode(!liveMode)}
+                    className="text-xs"
+                  >
+                    <Radio className="mr-1 h-3 w-3" />
+                    {liveMode ? "Stop Live" : "Go Live"}
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -424,6 +449,7 @@ const Dashboard = () => {
                   <TrajectoryMap 
                     trajectories={response.data}
                     onTrajectorySelect={setSelectedTrajectory}
+                    liveMode={liveMode}
                   />
                 </div>
                 {selectedTrajectory && (
@@ -588,6 +614,16 @@ const Dashboard = () => {
           </Card>
         )}
           </div>
+
+          {/* Live Producer Panel */}
+          {liveMode && response && (
+            <div className="mx-auto max-w-6xl px-8 pb-10">
+              <LiveProducer 
+                trajectories={filteredAndSortedTrajectories}
+                traceId={response.traceId}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
