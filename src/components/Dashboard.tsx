@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, CheckCircle2, XCircle, Activity, Map as MapIcon, Brain, Search, Filter, Radio, AlertCircle } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Activity, Map as MapIcon, Brain, Search, Filter, Radio, AlertCircle, Keyboard } from "lucide-react";
 import { queryAgent, approveHitl } from "@/api/api";
 import type { QueryResponse, Trajectory } from "@/types";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import { LiveProducer } from "@/components/LiveProducer";
 import { saveQuery, updateQueryApproval } from "@/services/queryHistory";
 import { analyzeThreats } from "@/services/aiAnalysis";
 import { checkSystemHealth, type HealthCheckResponse } from "@/api/health";
+import { KeyboardShortcuts, useKeyboardShortcuts } from "@/components/KeyboardShortcuts";
 
 const Dashboard = () => {
   const [prompt, setPrompt] = useState("");
@@ -28,6 +29,7 @@ const Dashboard = () => {
   const [selectedTrajectory, setSelectedTrajectory] = useState<Trajectory | null>(null);
   const [systemHealth, setSystemHealth] = useState<HealthCheckResponse | null>(null);
   const [checkingHealth, setCheckingHealth] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   
   // Filter and sort state
   const [trajectorySearch, setTrajectorySearch] = useState("");
@@ -35,6 +37,9 @@ const Dashboard = () => {
   const [shipTypeFilter, setShipTypeFilter] = useState<string>("all");
   const [traceSearch, setTraceSearch] = useState("");
   const [liveMode, setLiveMode] = useState(false);
+
+  // Refs
+  const promptInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Check system health on mount
   useEffect(() => {
@@ -55,6 +60,34 @@ const Dashboard = () => {
     
     performHealthCheck();
   }, []);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onExecuteQuery: () => {
+      if (!loading && !checkingHealth && prompt.trim()) {
+        handleQuery();
+      }
+    },
+    onClear: () => {
+      if (showShortcuts) {
+        setShowShortcuts(false);
+      } else {
+        setPrompt("");
+        setResponse(null);
+        setError(null);
+        setAiAnalysis(null);
+      }
+    },
+    onToggleMap: () => setShowMap(prev => !prev),
+    onAIAnalysis: () => {
+      if (response && response.data.length > 0 && !analyzingAI) {
+        handleAIAnalysis();
+      }
+    },
+    onFocusInput: () => promptInputRef.current?.focus(),
+    onShowHelp: () => setShowShortcuts(prev => !prev),
+    onToggleLive: () => setLiveMode(prev => !prev),
+  });
 
   const performHealthCheck = async () => {
     setCheckingHealth(true);
@@ -280,6 +313,15 @@ const Dashboard = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowShortcuts(true)}
+                  className="gap-2"
+                >
+                  <Keyboard className="h-4 w-4" />
+                  <span className="text-xs">?</span>
+                </Button>
                 {systemHealth && (
                   <Badge 
                     variant={systemHealth.ready ? "default" : "secondary"}
@@ -311,13 +353,19 @@ const Dashboard = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Textarea
-              placeholder='e.g., "threats near Svalbard" or "unusual fishing vessel behavior"'
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="min-h-[100px] resize-none font-sans text-sm bg-input/30 border-border/50 focus:border-primary/50 transition-colors"
-              disabled={loading}
-            />
+            <div className="relative">
+              <Textarea
+                ref={promptInputRef}
+                placeholder='e.g., "threats near Svalbard" or "unusual fishing vessel behavior"'
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                className="min-h-[100px] resize-none font-sans text-sm bg-input/30 border-border/50 focus:border-primary/50 transition-colors"
+                disabled={loading}
+              />
+              <Badge variant="outline" className="absolute bottom-2 right-2 text-[10px] font-mono opacity-50">
+                Ctrl+↵
+              </Badge>
+            </div>
             <Button
               onClick={handleQuery}
               disabled={loading || checkingHealth || !prompt.trim()}
@@ -542,27 +590,33 @@ const Dashboard = () => {
                     variant={liveMode ? "destructive" : "outline"}
                     size="sm"
                     onClick={() => setLiveMode(!liveMode)}
-                    className="text-xs"
+                    className="text-xs gap-2"
                   >
-                    <Radio className="mr-1 h-3 w-3" />
+                    <Radio className="h-3 w-3" />
                     {liveMode ? "Stop Live" : "Go Live"}
+                    <Badge variant="secondary" className="text-[10px] font-mono ml-1 px-1 py-0">
+                      L
+                    </Badge>
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleAIAnalysis}
                     disabled={analyzingAI}
-                    className="text-xs"
+                    className="text-xs gap-2"
                   >
                     {analyzingAI ? (
                       <>
-                        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        <Loader2 className="h-3 w-3 animate-spin" />
                         Analyzing...
                       </>
                     ) : (
                       <>
-                        <Brain className="mr-1 h-3 w-3" />
+                        <Brain className="h-3 w-3" />
                         AI Analysis
+                        <Badge variant="secondary" className="text-[10px] font-mono ml-1 px-1 py-0">
+                          A
+                        </Badge>
                       </>
                     )}
                   </Button>
@@ -570,9 +624,12 @@ const Dashboard = () => {
                     variant="outline"
                     size="sm"
                     onClick={() => setShowMap(!showMap)}
-                    className="text-xs"
+                    className="text-xs gap-2"
                   >
                     {showMap ? "Hide" : "Show"}
+                    <Badge variant="secondary" className="text-[10px] font-mono ml-1 px-1 py-0">
+                      M
+                    </Badge>
                   </Button>
                 </div>
               </div>
@@ -763,6 +820,12 @@ const Dashboard = () => {
           )}
         </div>
       </div>
+
+      {/* Keyboard Shortcuts Dialog */}
+      <KeyboardShortcuts 
+        open={showShortcuts}
+        onOpenChange={setShowShortcuts}
+      />
     </div>
   );
 };
