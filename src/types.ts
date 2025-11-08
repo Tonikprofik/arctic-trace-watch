@@ -31,6 +31,7 @@ export interface QueryResponse {
     totalMs: number;
     weaviateMs?: number;
   };
+  mock?: boolean;
 }
 
 export interface ApproveRequest {

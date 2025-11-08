@@ -197,9 +197,16 @@ const Dashboard = () => {
       // Save to database
       await saveQuery(prompt.trim(), result.proposal, result.traceId);
       
-      toast.success("Query completed", {
-        description: "AI analysis ready for review",
-      });
+      // Check if using mock data
+      if ((result as any).mock) {
+        toast.warning("Using demo data", {
+          description: "Weaviate unavailable - showing mock trajectories for demo",
+        });
+      } else {
+        toast.success("Query completed", {
+          description: "AI analysis ready for review",
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Query failed";
       setError(message);
