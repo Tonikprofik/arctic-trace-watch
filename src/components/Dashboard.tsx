@@ -204,7 +204,7 @@ const Dashboard = () => {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold tracking-tight gradient-text">
-                    Observable C<sub className="text-base">2</sub>
+                    Observable C<sub className="text-lg font-bold align-baseline -mb-1">2</sub>
                   </h1>
                   <p className="text-xs text-muted-foreground font-mono mt-0.5">
                     Copenhagen Defense • Maritime Intelligence Platform
