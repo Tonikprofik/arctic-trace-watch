@@ -29,13 +29,33 @@ export async function checkSystemHealth(): Promise<HealthCheckResponse> {
     const { data, error } = await supabase.functions.invoke("health-check");
 
     if (error) {
-      console.error("Health check failed:", error);
-      throw new Error(`Health check failed: ${error.message}`);
+      console.warn("Health check error:", error);
+      return {
+        status: "error",
+        timestamp: new Date().toISOString(),
+        checks: {
+          weaviate: { status: "down", responseTime: 0, message: "Unavailable" },
+          openai: { status: "missing", message: "Unknown" },
+          edgeFunctions: { status: "down", responseTime: 0 }
+        },
+        ready: false,
+        version: "1.0.0"
+      };
     }
 
     return data as HealthCheckResponse;
   } catch (error) {
-    console.error("Error in checkSystemHealth:", error);
-    throw error;
+    console.warn("Error in checkSystemHealth:", error);
+    return {
+      status: "error",
+      timestamp: new Date().toISOString(),
+      checks: {
+        weaviate: { status: "down", responseTime: 0, message: "Unavailable" },
+        openai: { status: "missing", message: "Unknown" },
+        edgeFunctions: { status: "down", responseTime: 0 }
+      },
+      ready: false,
+      version: "1.0.0"
+    };
   }
 }

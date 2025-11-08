@@ -161,12 +161,14 @@ const Dashboard = () => {
       return;
     }
 
-    // Check system health before querying
-    const isHealthy = await performHealthCheck();
-    if (!isHealthy) {
-      setError("System not ready. Please wait and try again.");
-      return;
-    }
+    // Check system health (non-blocking warning)
+    performHealthCheck().then((isHealthy) => {
+      if (!isHealthy) {
+        toast.warning("System may be degraded", {
+          description: "Query will proceed, but results may be limited"
+        });
+      }
+    });
 
     setLoading(true);
     setError(null);
