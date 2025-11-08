@@ -1,16 +1,19 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Trajectory } from "@/types";
+import { Badge } from "@/components/ui/badge";
 
 interface TrajectoryMapProps {
   trajectories: Trajectory[];
+  onTrajectorySelect?: (trajectory: Trajectory) => void;
 }
 
-const TrajectoryMap = ({ trajectories }: TrajectoryMapProps) => {
+const TrajectoryMap = ({ trajectories, onTrajectorySelect }: TrajectoryMapProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
@@ -57,10 +60,11 @@ const TrajectoryMap = ({ trajectories }: TrajectoryMapProps) => {
       const latLng: L.LatLngExpression = [latitude, longitude];
 
       // Add centroid marker
+      const isSelected = selectedIndex === index;
       const markerIcon = L.divIcon({
         className: "custom-marker",
         html: `
-          <div class="flex items-center justify-center w-8 h-8 rounded-full bg-primary/80 border-2 border-primary shadow-lg backdrop-blur-sm">
+          <div class="flex items-center justify-center w-8 h-8 rounded-full ${isSelected ? 'bg-success border-success scale-110' : 'bg-primary/80 border-primary'} border-2 shadow-lg backdrop-blur-sm transition-all duration-200 cursor-pointer hover:scale-110">
             <span class="text-xs font-mono font-semibold text-primary-foreground">${index + 1}</span>
           </div>
         `,
@@ -69,17 +73,47 @@ const TrajectoryMap = ({ trajectories }: TrajectoryMapProps) => {
       });
 
       const marker = L.marker(latLng, { icon: markerIcon });
+      
+      // Add click handler
+      marker.on('click', () => {
+        setSelectedIndex(index);
+        if (onTrajectorySelect) {
+          onTrajectorySelect(traj);
+        }
+      });
 
-      // Create popup content
+      // Create enhanced popup content
       const popupContent = `
-        <div class="p-2 min-w-[200px]">
-          <div class="font-mono text-xs font-semibold text-primary mb-2">
-            MMSI: ${traj.mmsi || "N/A"}
+        <div class="p-3 min-w-[240px]">
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-mono text-sm font-semibold text-primary">
+              MMSI: ${traj.mmsi || "N/A"}
+            </div>
+            <div class="text-xs px-2 py-0.5 rounded bg-primary/20 text-primary">
+              #${index + 1}
+            </div>
           </div>
-          <div class="space-y-1 text-xs">
-            <div><span class="text-muted-foreground">Type:</span> ${traj.shipType || "Unknown"}</div>
-            <div><span class="text-muted-foreground">Points:</span> ${traj.trackLength || "N/A"}</div>
-            <div><span class="text-muted-foreground">Coords:</span> ${latitude.toFixed(4)}°N, ${longitude.toFixed(4)}°E</div>
+          <div class="space-y-1.5 text-xs">
+            <div class="flex justify-between">
+              <span class="text-muted-foreground">Type:</span> 
+              <span class="font-medium">${traj.shipType || "Unknown"}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-muted-foreground">Points:</span> 
+              <span class="font-medium">${traj.trackLength || "N/A"}</span>
+            </div>
+            <div class="border-t border-border/50 pt-1.5 mt-1.5">
+              <div class="text-muted-foreground mb-0.5">Location:</div>
+              <div class="font-mono text-[10px] text-primary/90">${latitude.toFixed(4)}°N, ${longitude.toFixed(4)}°E</div>
+            </div>
+            ${traj.distance !== undefined ? `
+              <div class="border-t border-border/50 pt-1.5 mt-1.5">
+                <div class="flex justify-between">
+                  <span class="text-muted-foreground">Distance:</span>
+                  <span class="font-mono text-primary">${traj.distance.toFixed(3)}</span>
+                </div>
+              </div>
+            ` : ''}
           </div>
         </div>
       `;
@@ -98,9 +132,9 @@ const TrajectoryMap = ({ trajectories }: TrajectoryMapProps) => {
         ];
 
         const polyline = L.polyline(pathCoords, {
-          color: "hsl(210, 90%, 58%)",
-          weight: 2,
-          opacity: 0.6,
+          color: isSelected ? "hsl(142, 76%, 45%)" : "hsl(210, 90%, 58%)",
+          weight: isSelected ? 3 : 2,
+          opacity: isSelected ? 0.9 : 0.6,
           dashArray: "5, 10",
         });
 
@@ -142,7 +176,7 @@ const TrajectoryMap = ({ trajectories }: TrajectoryMapProps) => {
     if (bounds.length > 0) {
       mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
     }
-  }, [trajectories]);
+  }, [trajectories, selectedIndex]);
 
   return (
     <div className="relative w-full h-full">

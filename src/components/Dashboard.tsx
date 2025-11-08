@@ -3,20 +3,24 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, XCircle, Activity, Map as MapIcon } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Activity, Map as MapIcon, Brain } from "lucide-react";
 import { queryAgent, approveHitl } from "@/api/api";
 import type { QueryResponse, Trajectory } from "@/types";
 import { toast } from "sonner";
 import ActivityFeed from "@/components/ActivityFeed";
 import TrajectoryMap from "@/components/TrajectoryMap";
 import { saveQuery, updateQueryApproval } from "@/services/queryHistory";
+import { analyzeThreats } from "@/services/aiAnalysis";
 
 const Dashboard = () => {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<QueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showMap, setShowMap] = useState(false);
+  const [showMap, setShowMap] = useState(true);
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [analyzingAI, setAnalyzingAI] = useState(false);
+  const [selectedTrajectory, setSelectedTrajectory] = useState<Trajectory | null>(null);
 
   const handleQuery = async () => {
     if (!prompt.trim()) {
@@ -27,6 +31,8 @@ const Dashboard = () => {
     setLoading(true);
     setError(null);
     setResponse(null);
+    setAiAnalysis(null);
+    setSelectedTrajectory(null);
 
     try {
       const result = await queryAgent({ prompt: prompt.trim() });
@@ -42,6 +48,25 @@ const Dashboard = () => {
       toast.error(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAIAnalysis = async () => {
+    if (!response || response.data.length === 0) {
+      toast.error("No trajectory data to analyze");
+      return;
+    }
+
+    setAnalyzingAI(true);
+    try {
+      const analysis = await analyzeThreats(response.data, prompt);
+      setAiAnalysis(analysis);
+      toast.success("AI threat analysis complete");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Analysis failed";
+      toast.error(message);
+    } finally {
+      setAnalyzingAI(false);
     }
   };
 
@@ -250,27 +275,94 @@ const Dashboard = () => {
                 <div className="flex items-center gap-2">
                   <MapIcon className="h-4 w-4 text-primary" />
                   <CardTitle className="text-base font-medium">Maritime Visualization</CardTitle>
+                  <Badge variant="outline" className="font-mono text-xs">
+                    {response.data.length} vessel{response.data.length !== 1 ? "s" : ""}
+                  </Badge>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowMap(!showMap)}
-                  className="text-xs"
-                >
-                  {showMap ? "Hide Map" : "Show Map"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAIAnalysis}
+                    disabled={analyzingAI}
+                    className="text-xs"
+                  >
+                    {analyzingAI ? (
+                      <>
+                        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <Brain className="mr-1 h-3 w-3" />
+                        AI Analysis
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowMap(!showMap)}
+                    className="text-xs"
+                  >
+                    {showMap ? "Hide" : "Show"}
+                  </Button>
+                </div>
               </div>
               <CardDescription className="text-xs">
-                Interactive trajectory paths near Svalbard
+                Interactive trajectory paths • Click markers for details
               </CardDescription>
             </CardHeader>
             {showMap && (
               <CardContent>
                 <div className="h-[500px] rounded-lg overflow-hidden">
-                  <TrajectoryMap trajectories={response.data} />
+                  <TrajectoryMap 
+                    trajectories={response.data}
+                    onTrajectorySelect={setSelectedTrajectory}
+                  />
                 </div>
+                {selectedTrajectory && (
+                  <div className="mt-3 p-3 rounded-lg border border-border/50 bg-card/30">
+                    <div className="text-xs font-semibold text-primary mb-2">
+                      Selected: MMSI {selectedTrajectory.mmsi || "N/A"}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Type:</span>{" "}
+                        {selectedTrajectory.shipType || "Unknown"}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Points:</span>{" "}
+                        {selectedTrajectory.trackLength || "N/A"}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             )}
+          </Card>
+        )}
+
+        {/* AI Threat Analysis */}
+        {aiAnalysis && (
+          <Card className="bg-card/50 border-primary/30 shadow-lg animate-scale-in">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Brain className="h-4 w-4 text-primary" />
+                <CardTitle className="text-base font-medium">AI Threat Analysis</CardTitle>
+                <Badge className="font-mono text-xs bg-primary/20 text-primary border-primary/30">
+                  OpenAI GPT-5
+                </Badge>
+              </div>
+              <CardDescription className="text-xs">
+                Comprehensive maritime threat assessment
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded border border-border/50 bg-secondary/30 p-4 text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                {aiAnalysis}
+              </div>
+            </CardContent>
           </Card>
         )}
 
