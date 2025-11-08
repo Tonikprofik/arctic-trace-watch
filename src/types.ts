@@ -6,6 +6,7 @@ export interface GeoPoint {
 }
 
 export interface Trajectory {
+  id?: string;
   mmsi?: number;
   shipType?: string;
   trackLength?: number;
@@ -15,6 +16,11 @@ export interface Trajectory {
   startLocation?: GeoPoint;
   endLocation?: GeoPoint;
   distance?: number;
+  lat?: number[];
+  lon?: number[];
+  timestamps?: number[];
+  speed?: number[];
+  course?: number[];
 }
 
 export interface QueryRequest {

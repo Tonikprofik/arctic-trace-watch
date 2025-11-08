@@ -8,8 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Maximize2, Minimize2, Layers, Play, Pause, RotateCcw, ZoomIn, Flame, Radio } from "lucide-react";
 import { toast } from "sonner";
 import { useRealtimeTelemetry } from "@/hooks/useRealtimeTelemetry";
-import type { LiveVessel } from "@/services/realtime";
-import { StatisticsOverlay } from "@/components/StatisticsOverlay";
 
 interface TrajectoryMapProps {
   trajectories: Trajectory[];
@@ -73,7 +71,7 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect, liveMode = false }: T
     if (!liveMode || !mapInstanceRef.current || liveVessels.length === 0) return;
 
     requestAnimationFrame(() => {
-      liveVessels.forEach((vessel: LiveVessel) => {
+      liveVessels.forEach((vessel) => {
         let marker = liveMarkersRef.current.get(vessel.mmsi);
         
         if (!marker) {
@@ -419,13 +417,6 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect, liveMode = false }: T
   return (
     <div className="relative w-full h-full group">
       <div ref={mapRef} className="absolute inset-0 rounded-lg border border-border/50 transition-all duration-300" />
-      
-      {/* Statistics Overlay */}
-      <StatisticsOverlay 
-        trajectories={trajectories} 
-        liveVessels={liveVessels}
-        liveMode={liveMode}
-      />
       
       {/* Legend */}
       <div className="absolute top-3 left-3 bg-card/95 backdrop-blur-sm border border-border/50 rounded-lg px-3 py-2 shadow-lg z-[1000] animate-fade-in">

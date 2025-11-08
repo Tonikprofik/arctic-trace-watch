@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, CheckCircle2, XCircle, Activity, Map as MapIcon, Brain, Search, Filter, Radio, AlertCircle, Keyboard } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Activity, Map as MapIcon, Brain, Search, Filter, Radio, AlertCircle, Keyboard, BarChart3, Download } from "lucide-react";
 import { queryAgent, approveHitl } from "@/api/api";
 import type { QueryResponse, Trajectory } from "@/types";
 import { toast } from "sonner";
@@ -17,6 +17,9 @@ import { saveQuery, updateQueryApproval } from "@/services/queryHistory";
 import { analyzeThreats } from "@/services/aiAnalysis";
 import { checkSystemHealth, type HealthCheckResponse } from "@/api/health";
 import { KeyboardShortcuts, useKeyboardShortcuts } from "@/components/KeyboardShortcuts";
+import { StatisticsOverlay } from "@/components/StatisticsOverlay";
+import { useRealtimeTelemetry } from "@/hooks/useRealtimeTelemetry";
+import { exportToCSV, exportToJSON, exportAnalysisMarkdown } from "@/services/export";
 
 const Dashboard = () => {
   const [prompt, setPrompt] = useState("");
@@ -30,6 +33,7 @@ const Dashboard = () => {
   const [systemHealth, setSystemHealth] = useState<HealthCheckResponse | null>(null);
   const [checkingHealth, setCheckingHealth] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showStatistics, setShowStatistics] = useState(false);
   
   // Filter and sort state
   const [trajectorySearch, setTrajectorySearch] = useState("");
@@ -38,8 +42,125 @@ const Dashboard = () => {
   const [traceSearch, setTraceSearch] = useState("");
   const [liveMode, setLiveMode] = useState(false);
 
+  // Real-time telemetry
+  const { liveVessels, isConnected } = useRealtimeTelemetry(liveMode);
+
   // Refs
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-load demo data on mount for prototype demo
+  useEffect(() => {
+    const generateDemoPath = (start: [number, number], end: [number, number], points: number) => {
+      const lat: number[] = [];
+      const lon: number[] = [];
+      const timestamps: number[] = [];
+      const speed: number[] = [];
+      const course: number[] = [];
+      
+      const baseTime = Date.now() - (3600000 * 2); // 2 hours ago
+      
+      for (let i = 0; i < points; i++) {
+        const t = i / (points - 1);
+        lat.push(start[0] + (end[0] - start[0]) * t + (Math.random() - 0.5) * 0.02);
+        lon.push(start[1] + (end[1] - start[1]) * t + (Math.random() - 0.5) * 0.02);
+        timestamps.push(baseTime + (i * 120));
+        speed.push(5 + Math.random() * 10);
+        course.push((Math.atan2(end[1] - start[1], end[0] - start[0]) * 180 / Math.PI + 360) % 360);
+      }
+      
+      return { lat, lon, timestamps, speed, course };
+    };
+
+    const demoData: QueryResponse = {
+      proposal: `🎯 DEMO MODE: XAI Analysis Complete\n\n**THREAT ASSESSMENT**: 5 anomalous trajectories detected near Svalbard\n\n**KEY INDICATORS:**\n- Unusual loitering patterns detected\n- Speed variations outside normal parameters  \n- Proximity to restricted maritime zones\n- Multiple vessel types exhibiting coordinated behavior\n\n**VESSEL BREAKDOWN:**\n- Vessel 1 (MMSI: 211002340): Other, 28 points - Erratic course changes\n- Vessel 2 (MMSI: 211156800): Service, 45 points - Extended loitering\n- Vessel 3 (MMSI: 211202460): Fishing, 67 points - Restricted area incursion\n- Vessel 4 (MMSI: 211336220): Passenger, 89 points - Unusual speed profile\n- Vessel 5 (MMSI: 211627240): Service, 124 points - Non-standard routing\n\n**RECOMMENDATION:** Immediate review required. All vessels flagged for enhanced monitoring and cross-reference with maritime authority databases.`,
+      data: [
+        {
+          id: "demo-1",
+          mmsi: 211002340,
+          shipType: "Other",
+          trackLength: 28,
+          timeStart: "2024-01-15T08:00:00Z",
+          timeEnd: "2024-01-15T10:30:00Z",
+          centroid: { latitude: 78.2232, longitude: 15.6469 },
+          startLocation: { latitude: 78.1, longitude: 15.5 },
+          endLocation: { latitude: 78.3, longitude: 15.7 },
+          distance: 0.15,
+          ...generateDemoPath([78.1, 15.5], [78.3, 15.7], 28),
+        },
+        {
+          id: "demo-2",
+          mmsi: 211156800,
+          shipType: "Service",
+          trackLength: 45,
+          timeStart: "2024-01-15T09:00:00Z",
+          timeEnd: "2024-01-15T12:00:00Z",
+          centroid: { latitude: 78.15, longitude: 15.8 },
+          startLocation: { latitude: 78.0, longitude: 15.6 },
+          endLocation: { latitude: 78.25, longitude: 16.0 },
+          distance: 0.18,
+          ...generateDemoPath([78.0, 15.6], [78.25, 16.0], 45),
+        },
+        {
+          id: "demo-3",
+          mmsi: 211202460,
+          shipType: "Fishing",
+          trackLength: 67,
+          timeStart: "2024-01-15T07:30:00Z",
+          timeEnd: "2024-01-15T13:00:00Z",
+          centroid: { latitude: 78.35, longitude: 15.3 },
+          startLocation: { latitude: 78.25, longitude: 15.1 },
+          endLocation: { latitude: 78.45, longitude: 15.5 },
+          distance: 0.21,
+          ...generateDemoPath([78.25, 15.1], [78.45, 15.5], 67),
+        },
+        {
+          id: "demo-4",
+          mmsi: 211336220,
+          shipType: "Passenger",
+          trackLength: 89,
+          timeStart: "2024-01-15T06:00:00Z",
+          timeEnd: "2024-01-15T14:30:00Z",
+          centroid: { latitude: 78.05, longitude: 16.2 },
+          startLocation: { latitude: 77.9, longitude: 15.9 },
+          endLocation: { latitude: 78.2, longitude: 16.5 },
+          distance: 0.24,
+          ...generateDemoPath([77.9, 15.9], [78.2, 16.5], 89),
+        },
+        {
+          id: "demo-5",
+          mmsi: 211627240,
+          shipType: "Service",
+          trackLength: 124,
+          timeStart: "2024-01-15T05:00:00Z",
+          timeEnd: "2024-01-15T16:00:00Z",
+          centroid: { latitude: 78.28, longitude: 14.9 },
+          startLocation: { latitude: 78.15, longitude: 14.6 },
+          endLocation: { latitude: 78.4, longitude: 15.2 },
+          distance: 0.28,
+          ...generateDemoPath([78.15, 14.6], [78.4, 15.2], 124),
+        },
+      ],
+      trace: [
+        "RAG: Querying Weaviate vector database...",
+        "GEN: OpenAI summary generated with reasoning trace.",
+        "HITL: Formulating proposal for human operator review."
+      ],
+      traceId: "demo-trace-" + Date.now(),
+      timings: {
+        totalMs: 1247,
+        weaviateMs: 892,
+      },
+    };
+
+    setResponse(demoData);
+    setPrompt("threats near svalbard");
+    setShowMap(true);
+    
+    toast.success("Demo Mode Active", {
+      description: "All features loaded with sample data",
+      duration: 3000,
+    });
+  }, []);
 
   // Check system health on mount
   useEffect(() => {
@@ -47,12 +168,6 @@ const Dashboard = () => {
       try {
         const health = await checkSystemHealth();
         setSystemHealth(health);
-        
-        if (!health.ready) {
-          toast.warning("System starting up", {
-            description: health.checks.weaviate.message,
-          });
-        }
       } catch (err) {
         console.error("Health check failed:", err);
       }
@@ -88,6 +203,42 @@ const Dashboard = () => {
     onShowHelp: () => setShowShortcuts(prev => !prev),
     onToggleLive: () => setLiveMode(prev => !prev),
   });
+
+  const handleExportCSV = () => {
+    if (!response) return;
+    try {
+      exportToCSV(response.data);
+      toast.success("Exported to CSV");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export failed");
+    }
+  };
+
+  const handleExportJSON = () => {
+    if (!response) return;
+    try {
+      exportToJSON(response);
+      toast.success("Exported to JSON");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export failed");
+    }
+  };
+
+  const handleExportReport = () => {
+    if (!response) return;
+    try {
+      exportAnalysisMarkdown(
+        prompt,
+        response.proposal,
+        aiAnalysis,
+        response.data,
+        response.trace
+      );
+      toast.success("Exported analysis report");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export failed");
+    }
+  };
 
   const performHealthCheck = async () => {
     setCheckingHealth(true);
@@ -322,6 +473,12 @@ const Dashboard = () => {
                   <Keyboard className="h-4 w-4" />
                   <span className="text-xs">?</span>
                 </Button>
+                {liveMode && (
+                  <Badge variant="destructive" className="animate-pulse gap-1">
+                    <Radio className="w-3 h-3" />
+                    LIVE ({liveVessels.length})
+                  </Badge>
+                )}
                 {systemHealth && (
                   <Badge 
                     variant={systemHealth.ready ? "default" : "secondary"}
@@ -707,9 +864,47 @@ const Dashboard = () => {
                   <Filter className="h-5 w-5 text-primary" />
                   Retrieved Trajectories
                 </CardTitle>
-                <Badge variant="secondary" className="font-mono text-xs px-2 py-1 bg-secondary/80 border-border/50">
-                  {filteredAndSortedTrajectories.length} / {response.data.length}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowStatistics(true)}
+                    className="text-xs gap-2"
+                  >
+                    <BarChart3 className="h-3 w-3" />
+                    Statistics
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportCSV}
+                    className="text-xs gap-2"
+                  >
+                    <Download className="h-3 w-3" />
+                    CSV
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportJSON}
+                    className="text-xs gap-2"
+                  >
+                    <Download className="h-3 w-3" />
+                    JSON
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportReport}
+                    className="text-xs gap-2"
+                  >
+                    <Download className="h-3 w-3" />
+                    Report
+                  </Button>
+                  <Badge variant="secondary" className="font-mono text-xs px-2 py-1 bg-secondary/80 border-border/50">
+                    {filteredAndSortedTrajectories.length} / {response.data.length}
+                  </Badge>
+                </div>
               </div>
               <CardDescription className="text-sm">Indexed anomalous maritime trajectories</CardDescription>
             </CardHeader>
@@ -820,6 +1015,14 @@ const Dashboard = () => {
           )}
         </div>
       </div>
+
+      {/* Statistics Overlay */}
+      {showStatistics && (
+        <StatisticsOverlay 
+          trajectories={response.data}
+          onClose={() => setShowStatistics(false)}
+        />
+      )}
 
       {/* Keyboard Shortcuts Dialog */}
       <KeyboardShortcuts 
