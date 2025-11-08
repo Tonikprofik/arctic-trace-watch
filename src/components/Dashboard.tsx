@@ -48,18 +48,126 @@ const Dashboard = () => {
   // Refs
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Auto-load demo data on mount for prototype demo
+  useEffect(() => {
+    const generateDemoPath = (start: [number, number], end: [number, number], points: number) => {
+      const lat: number[] = [];
+      const lon: number[] = [];
+      const timestamps: number[] = [];
+      const speed: number[] = [];
+      const course: number[] = [];
+      
+      const baseTime = Date.now() - (3600000 * 2); // 2 hours ago
+      
+      for (let i = 0; i < points; i++) {
+        const t = i / (points - 1);
+        lat.push(start[0] + (end[0] - start[0]) * t + (Math.random() - 0.5) * 0.02);
+        lon.push(start[1] + (end[1] - start[1]) * t + (Math.random() - 0.5) * 0.02);
+        timestamps.push(baseTime + (i * 120));
+        speed.push(5 + Math.random() * 10);
+        course.push((Math.atan2(end[1] - start[1], end[0] - start[0]) * 180 / Math.PI + 360) % 360);
+      }
+      
+      return { lat, lon, timestamps, speed, course };
+    };
+
+    const demoData: QueryResponse = {
+      proposal: `🎯 DEMO MODE: XAI Analysis Complete\n\n**THREAT ASSESSMENT**: 5 anomalous trajectories detected near Svalbard\n\n**KEY INDICATORS:**\n- Unusual loitering patterns detected\n- Speed variations outside normal parameters  \n- Proximity to restricted maritime zones\n- Multiple vessel types exhibiting coordinated behavior\n\n**VESSEL BREAKDOWN:**\n- Vessel 1 (MMSI: 211002340): Other, 28 points - Erratic course changes\n- Vessel 2 (MMSI: 211156800): Service, 45 points - Extended loitering\n- Vessel 3 (MMSI: 211202460): Fishing, 67 points - Restricted area incursion\n- Vessel 4 (MMSI: 211336220): Passenger, 89 points - Unusual speed profile\n- Vessel 5 (MMSI: 211627240): Service, 124 points - Non-standard routing\n\n**RECOMMENDATION:** Immediate review required. All vessels flagged for enhanced monitoring and cross-reference with maritime authority databases.`,
+      data: [
+        {
+          id: "demo-1",
+          mmsi: 211002340,
+          shipType: "Other",
+          trackLength: 28,
+          timeStart: "2024-01-15T08:00:00Z",
+          timeEnd: "2024-01-15T10:30:00Z",
+          centroid: { latitude: 78.2232, longitude: 15.6469 },
+          startLocation: { latitude: 78.1, longitude: 15.5 },
+          endLocation: { latitude: 78.3, longitude: 15.7 },
+          distance: 0.15,
+          ...generateDemoPath([78.1, 15.5], [78.3, 15.7], 28),
+        },
+        {
+          id: "demo-2",
+          mmsi: 211156800,
+          shipType: "Service",
+          trackLength: 45,
+          timeStart: "2024-01-15T09:00:00Z",
+          timeEnd: "2024-01-15T12:00:00Z",
+          centroid: { latitude: 78.15, longitude: 15.8 },
+          startLocation: { latitude: 78.0, longitude: 15.6 },
+          endLocation: { latitude: 78.25, longitude: 16.0 },
+          distance: 0.18,
+          ...generateDemoPath([78.0, 15.6], [78.25, 16.0], 45),
+        },
+        {
+          id: "demo-3",
+          mmsi: 211202460,
+          shipType: "Fishing",
+          trackLength: 67,
+          timeStart: "2024-01-15T07:30:00Z",
+          timeEnd: "2024-01-15T13:00:00Z",
+          centroid: { latitude: 78.35, longitude: 15.3 },
+          startLocation: { latitude: 78.25, longitude: 15.1 },
+          endLocation: { latitude: 78.45, longitude: 15.5 },
+          distance: 0.21,
+          ...generateDemoPath([78.25, 15.1], [78.45, 15.5], 67),
+        },
+        {
+          id: "demo-4",
+          mmsi: 211336220,
+          shipType: "Passenger",
+          trackLength: 89,
+          timeStart: "2024-01-15T06:00:00Z",
+          timeEnd: "2024-01-15T14:30:00Z",
+          centroid: { latitude: 78.05, longitude: 16.2 },
+          startLocation: { latitude: 77.9, longitude: 15.9 },
+          endLocation: { latitude: 78.2, longitude: 16.5 },
+          distance: 0.24,
+          ...generateDemoPath([77.9, 15.9], [78.2, 16.5], 89),
+        },
+        {
+          id: "demo-5",
+          mmsi: 211627240,
+          shipType: "Service",
+          trackLength: 124,
+          timeStart: "2024-01-15T05:00:00Z",
+          timeEnd: "2024-01-15T16:00:00Z",
+          centroid: { latitude: 78.28, longitude: 14.9 },
+          startLocation: { latitude: 78.15, longitude: 14.6 },
+          endLocation: { latitude: 78.4, longitude: 15.2 },
+          distance: 0.28,
+          ...generateDemoPath([78.15, 14.6], [78.4, 15.2], 124),
+        },
+      ],
+      trace: [
+        "RAG: Querying Weaviate vector database...",
+        "GEN: OpenAI summary generated with reasoning trace.",
+        "HITL: Formulating proposal for human operator review."
+      ],
+      traceId: "demo-trace-" + Date.now(),
+      timings: {
+        totalMs: 1247,
+        weaviateMs: 892,
+      },
+    };
+
+    setResponse(demoData);
+    setPrompt("threats near svalbard");
+    setShowMap(true);
+    
+    toast.success("Demo Mode Active", {
+      description: "All features loaded with sample data",
+      duration: 3000,
+    });
+  }, []);
+
   // Check system health on mount
   useEffect(() => {
     const performHealthCheck = async () => {
       try {
         const health = await checkSystemHealth();
         setSystemHealth(health);
-        
-        if (!health.ready) {
-          toast.warning("System starting up", {
-            description: health.checks.weaviate.message,
-          });
-        }
       } catch (err) {
         console.error("Health check failed:", err);
       }

@@ -6,6 +6,7 @@ export interface GeoPoint {
 }
 
 export interface Trajectory {
+  id?: string;
   mmsi?: number;
   shipType?: string;
   trackLength?: number;
