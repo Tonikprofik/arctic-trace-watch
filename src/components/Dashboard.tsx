@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, XCircle, Activity, Map as MapIcon, Brain } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, CheckCircle2, XCircle, Activity, Map as MapIcon, Brain, Search, Filter } from "lucide-react";
 import { queryAgent, approveHitl } from "@/api/api";
 import type { QueryResponse, Trajectory } from "@/types";
 import { toast } from "sonner";
@@ -21,6 +23,12 @@ const Dashboard = () => {
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [analyzingAI, setAnalyzingAI] = useState(false);
   const [selectedTrajectory, setSelectedTrajectory] = useState<Trajectory | null>(null);
+  
+  // Filter and sort state
+  const [trajectorySearch, setTrajectorySearch] = useState("");
+  const [trajectorySort, setTrajectorySort] = useState<string>("mmsi");
+  const [shipTypeFilter, setShipTypeFilter] = useState<string>("all");
+  const [traceSearch, setTraceSearch] = useState("");
 
   const handleQuery = async () => {
     if (!prompt.trim()) {
@@ -33,6 +41,10 @@ const Dashboard = () => {
     setResponse(null);
     setAiAnalysis(null);
     setSelectedTrajectory(null);
+    setTrajectorySearch("");
+    setTrajectorySort("mmsi");
+    setShipTypeFilter("all");
+    setTraceSearch("");
 
     try {
       const result = await queryAgent({ prompt: prompt.trim() });
@@ -108,6 +120,62 @@ const Dashboard = () => {
     if (!point) return "N/A";
     return `${point.latitude.toFixed(4)}°N, ${point.longitude.toFixed(4)}°E`;
   };
+
+  // Filter and sort trajectories
+  const filteredAndSortedTrajectories = useMemo(() => {
+    if (!response) return [];
+    
+    let filtered = [...response.data];
+    
+    // Apply ship type filter
+    if (shipTypeFilter !== "all") {
+      filtered = filtered.filter(t => t.shipType?.toLowerCase() === shipTypeFilter.toLowerCase());
+    }
+    
+    // Apply search filter
+    if (trajectorySearch.trim()) {
+      const search = trajectorySearch.toLowerCase();
+      filtered = filtered.filter(t => 
+        t.mmsi?.toString().includes(search) ||
+        t.shipType?.toLowerCase().includes(search) ||
+        formatCoordinates(t.centroid).toLowerCase().includes(search)
+      );
+    }
+    
+    // Apply sort
+    filtered.sort((a, b) => {
+      switch (trajectorySort) {
+        case "mmsi":
+          return (a.mmsi || 0) - (b.mmsi || 0);
+        case "shipType":
+          return (a.shipType || "").localeCompare(b.shipType || "");
+        case "trackLength":
+          return (b.trackLength || 0) - (a.trackLength || 0);
+        case "distance":
+          return (a.distance || 0) - (b.distance || 0);
+        case "timeStart":
+          return (a.timeStart || "").localeCompare(b.timeStart || "");
+        default:
+          return 0;
+      }
+    });
+    
+    return filtered;
+  }, [response, shipTypeFilter, trajectorySearch, trajectorySort]);
+
+  // Get unique ship types for filter
+  const shipTypes = useMemo(() => {
+    if (!response) return [];
+    const types = new Set(response.data.map(t => t.shipType).filter(Boolean));
+    return Array.from(types);
+  }, [response]);
+
+  // Filter trace
+  const filteredTrace = useMemo(() => {
+    if (!response || !traceSearch.trim()) return response?.trace || [];
+    const search = traceSearch.toLowerCase();
+    return response.trace.filter(step => step.toLowerCase().includes(search));
+  }, [response, traceSearch]);
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -199,9 +267,20 @@ const Dashboard = () => {
               </div>
               <CardDescription className="text-xs">Explainable AI decision pathway</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              {/* Trace Search */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Filter trace steps..."
+                  value={traceSearch}
+                  onChange={(e) => setTraceSearch(e.target.value)}
+                  className="pl-8 h-8 text-xs"
+                />
+              </div>
+              
               <ul className="space-y-2.5">
-                {response.trace.map((step, index) => (
+                {filteredTrace.map((step, index) => (
                   <li
                     key={index}
                     className="flex items-start gap-3 text-sm text-foreground/90 animate-fade-in"
@@ -373,14 +452,55 @@ const Dashboard = () => {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base font-medium">Retrieved Trajectories</CardTitle>
                 <Badge variant="secondary" className="font-mono text-xs">
-                  {response.data.length} anomal{response.data.length !== 1 ? "ies" : "y"}
+                  {filteredAndSortedTrajectories.length} / {response.data.length}
                 </Badge>
               </div>
               <CardDescription className="text-xs">Indexed anomalous maritime trajectories</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              {/* Filters and Sort */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search MMSI, type..."
+                    value={trajectorySearch}
+                    onChange={(e) => setTrajectorySearch(e.target.value)}
+                    className="pl-8 h-8 text-xs"
+                  />
+                </div>
+                
+                <Select value={shipTypeFilter} onValueChange={setShipTypeFilter}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <Filter className="h-3.5 w-3.5 mr-1" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-xs">All Types</SelectItem>
+                    {shipTypes.map(type => (
+                      <SelectItem key={type} value={type || ""} className="text-xs">
+                        {type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                <Select value={trajectorySort} onValueChange={setTrajectorySort}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mmsi" className="text-xs">Sort: MMSI</SelectItem>
+                    <SelectItem value="shipType" className="text-xs">Sort: Ship Type</SelectItem>
+                    <SelectItem value="trackLength" className="text-xs">Sort: Track Length</SelectItem>
+                    <SelectItem value="distance" className="text-xs">Sort: Distance</SelectItem>
+                    <SelectItem value="timeStart" className="text-xs">Sort: Time</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
               <div className="space-y-2.5">
-                {response.data.map((traj: Trajectory, index: number) => (
+                {filteredAndSortedTrajectories.map((traj: Trajectory, index: number) => (
                   <div
                     key={index}
                     className="rounded border border-border/50 bg-card/50 p-3.5 space-y-2 hover:border-border transition-colors"
