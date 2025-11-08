@@ -15,6 +15,11 @@ export interface Trajectory {
   startLocation?: GeoPoint;
   endLocation?: GeoPoint;
   distance?: number;
+  lat?: number[];
+  lon?: number[];
+  timestamps?: number[];
+  speed?: number[];
+  course?: number[];
 }
 
 export interface QueryRequest {

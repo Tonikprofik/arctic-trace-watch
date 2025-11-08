@@ -126,7 +126,28 @@ serve(async (req) => {
       tW1 = performance.now();
       console.warn("Weaviate unavailable, using demo data:", weaviateError);
       
-      // Return demo data when Weaviate is unavailable
+      // Generate comprehensive demo data with full trajectory paths
+      const generatePath = (start: [number, number], end: [number, number], points: number) => {
+        const lat: number[] = [];
+        const lon: number[] = [];
+        const timestamps: number[] = [];
+        const speed: number[] = [];
+        const course: number[] = [];
+        
+        const baseTime = Date.now() - (3600000 * 2); // 2 hours ago
+        
+        for (let i = 0; i < points; i++) {
+          const t = i / (points - 1);
+          lat.push(start[0] + (end[0] - start[0]) * t + (Math.random() - 0.5) * 0.02);
+          lon.push(start[1] + (end[1] - start[1]) * t + (Math.random() - 0.5) * 0.02);
+          timestamps.push(baseTime + (i * 120)); // 2 min intervals
+          speed.push(5 + Math.random() * 10); // 5-15 knots
+          course.push((Math.atan2(end[1] - start[1], end[0] - start[0]) * 180 / Math.PI + 360) % 360);
+        }
+        
+        return { lat, lon, timestamps, speed, course };
+      };
+      
       objs = [
         {
           _additional: { id: "demo-1", distance: 0.15 },
@@ -138,6 +159,7 @@ serve(async (req) => {
           centroid: { latitude: 78.2232, longitude: 15.6469 },
           startLocation: { latitude: 78.1, longitude: 15.5 },
           endLocation: { latitude: 78.3, longitude: 15.7 },
+          ...generatePath([78.1, 15.5], [78.3, 15.7], 28),
         },
         {
           _additional: { id: "demo-2", distance: 0.18 },
@@ -148,11 +170,48 @@ serve(async (req) => {
           timeEnd: "2024-01-15T12:00:00Z",
           centroid: { latitude: 78.15, longitude: 15.8 },
           startLocation: { latitude: 78.0, longitude: 15.6 },
-          endLocation: { latitude: 78.2, longitude: 16.0 },
+          endLocation: { latitude: 78.25, longitude: 16.0 },
+          ...generatePath([78.0, 15.6], [78.25, 16.0], 45),
+        },
+        {
+          _additional: { id: "demo-3", distance: 0.21 },
+          mmsi: 211202460,
+          shipType: "Fishing",
+          trackLength: 67,
+          timeStart: "2024-01-15T07:30:00Z",
+          timeEnd: "2024-01-15T13:00:00Z",
+          centroid: { latitude: 78.35, longitude: 15.3 },
+          startLocation: { latitude: 78.25, longitude: 15.1 },
+          endLocation: { latitude: 78.45, longitude: 15.5 },
+          ...generatePath([78.25, 15.1], [78.45, 15.5], 67),
+        },
+        {
+          _additional: { id: "demo-4", distance: 0.24 },
+          mmsi: 211336220,
+          shipType: "Passenger",
+          trackLength: 89,
+          timeStart: "2024-01-15T06:00:00Z",
+          timeEnd: "2024-01-15T14:30:00Z",
+          centroid: { latitude: 78.05, longitude: 16.2 },
+          startLocation: { latitude: 77.9, longitude: 15.9 },
+          endLocation: { latitude: 78.2, longitude: 16.5 },
+          ...generatePath([77.9, 15.9], [78.2, 16.5], 89),
+        },
+        {
+          _additional: { id: "demo-5", distance: 0.28 },
+          mmsi: 211627240,
+          shipType: "Service",
+          trackLength: 124,
+          timeStart: "2024-01-15T05:00:00Z",
+          timeEnd: "2024-01-15T16:00:00Z",
+          centroid: { latitude: 78.28, longitude: 14.9 },
+          startLocation: { latitude: 78.15, longitude: 14.6 },
+          endLocation: { latitude: 78.4, longitude: 15.2 },
+          ...generatePath([78.15, 14.6], [78.4, 15.2], 124),
         },
       ];
       
-      proposal = `🎭 DEMO MODE: Weaviate backend unavailable\n\n**Showing sample anomalous trajectories near Svalbard:**\n- 2 vessels with atypical movement patterns detected\n- Ship types: Other, Service\n- Pattern deviations in timing and routing\n\n**Note:** This is demonstration data. Configure WEAVIATE_URL secret to connect to a live Weaviate instance.`;
+      proposal = `🎭 DEMO MODE: Weaviate backend unavailable\n\n**Showing sample anomalous trajectories near Svalbard:**\n\n**DETECTED ANOMALIES:**\n- 5 vessels with atypical movement patterns\n- Ship types: Other, Service, Fishing, Passenger\n- Pattern deviations in timing, speed, and routing\n- All within 250km of Longyearbyen\n\n**KEY INDICATORS:**\n- Unusual loitering patterns detected\n- Speed variations outside normal parameters\n- Proximity to restricted maritime zones\n\n**RECOMMENDATION:** Review trajectories on map. All vessels flagged for enhanced monitoring.\n\n**Note:** This is demonstration data. Configure WEAVIATE_URL secret to connect to a live Weaviate instance with real AIS data.`;
     }
 
     trace.push("GEN: OpenAI summary generated.");
