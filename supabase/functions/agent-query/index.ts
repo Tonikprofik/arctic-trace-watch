@@ -50,9 +50,9 @@ function fields(includePaths: boolean): string {
 
 serve(async (req) => {
   const cors = {
-    "Access-Control-Allow-Origin": ORIGIN,
+    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   };
   
   if (req.method === "OPTIONS") {
