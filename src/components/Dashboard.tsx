@@ -73,44 +73,57 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="mx-auto max-w-6xl space-y-6">
-        {/* Header */}
-        <div className="border-b border-border pb-4">
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-            <Activity className="h-8 w-8 text-primary" />
-            Observable C<sub>2</sub>
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Human-in-the-Loop Maritime Anomaly Detection • Svalbard AIS Dataset
-          </p>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+        <div className="mx-auto max-w-7xl px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Activity className="h-7 w-7 text-primary" />
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                  Observable C<sub className="text-sm">2</sub>
+                </h1>
+                <p className="text-xs text-muted-foreground font-mono">
+                  Copenhagen Defense • Maritime Command & Control
+                </p>
+              </div>
+            </div>
+            <Badge variant="outline" className="font-mono text-xs">
+              Svalbard AIS
+            </Badge>
+          </div>
         </div>
+      </header>
+
+      <div className="mx-auto max-w-7xl px-6 py-8 space-y-6">
 
         {/* Query Input */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Query Agent</CardTitle>
-            <CardDescription>
-              Enter a natural language query to analyze anomalous maritime trajectories
+        <Card className="shadow-md border-border/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-medium">Query Agent</CardTitle>
+            <CardDescription className="text-xs">
+              Natural language query for anomalous maritime trajectories
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3">
             <Textarea
               placeholder='e.g., "threats near Svalbard" or "unusual fishing vessel behavior"'
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              className="min-h-[100px] resize-none"
+              className="min-h-[90px] resize-none font-sans text-sm"
               disabled={loading}
             />
             <Button
               onClick={handleQuery}
               disabled={loading || !prompt.trim()}
-              className="w-full"
+              className="w-full font-medium"
+              size="sm"
             >
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing Query...
+                  Processing...
                 </>
               ) : (
                 "Execute Query"
@@ -121,10 +134,10 @@ const Dashboard = () => {
 
         {/* Error Display */}
         {error && (
-          <Card className="border-destructive">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2 text-destructive">
-                <XCircle className="h-5 w-5" />
+          <Card className="border-destructive/50 bg-destructive/5">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-2 text-destructive text-sm">
+                <XCircle className="h-4 w-4 shrink-0" />
                 <span className="font-medium">{error}</span>
               </div>
             </CardContent>
@@ -133,31 +146,36 @@ const Dashboard = () => {
 
         {/* XAI Reasoning Trace */}
         {response && response.trace.length > 0 && (
-          <Card className="bg-trace-bg border-trace-border">
-            <CardHeader>
-              <CardTitle className="text-primary">XAI Reasoning Trace</CardTitle>
-              <CardDescription>Explainable AI decision pathway</CardDescription>
+          <Card className="bg-trace-bg border-trace-border/50 shadow-lg animate-fade-in">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-medium text-primary">XAI Reasoning Trace</CardTitle>
+                <Badge variant="outline" className="font-mono text-xs">Live</Badge>
+              </div>
+              <CardDescription className="text-xs">Explainable AI decision pathway</CardDescription>
             </CardHeader>
             <CardContent>
-              <ul className="space-y-3">
+              <ul className="space-y-2.5">
                 {response.trace.map((step, index) => (
                   <li
                     key={index}
-                    className="flex items-start gap-3 text-foreground"
+                    className="flex items-start gap-3 text-sm text-foreground/90 animate-fade-in"
+                    style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-trace-step text-xs font-bold text-primary-foreground">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-trace-step/20 border border-trace-step/30 text-xs font-mono font-semibold text-primary">
                       {index + 1}
                     </span>
-                    <span className="pt-0.5">{step}</span>
+                    <span className="pt-0.5 leading-relaxed">{step}</span>
                   </li>
                 ))}
               </ul>
               {response.timings && (
-                <div className="mt-4 pt-4 border-t border-border text-xs text-muted-foreground">
-                  Total: {response.timings.totalMs}ms
-                  {response.timings.weaviateMs && ` • Weaviate: ${response.timings.weaviateMs}ms`}
-                  {" • Trace ID: "}
-                  <code className="text-primary">{response.traceId}</code>
+                <div className="mt-4 pt-3 border-t border-border/50 text-xs text-muted-foreground font-mono flex items-center justify-between">
+                  <span>
+                    {response.timings.totalMs}ms
+                    {response.timings.weaviateMs && ` • DB: ${response.timings.weaviateMs}ms`}
+                  </span>
+                  <code className="text-primary/80 text-[10px]">{response.traceId}</code>
                 </div>
               )}
             </CardContent>
@@ -166,22 +184,26 @@ const Dashboard = () => {
 
         {/* Proposal */}
         {response && response.proposal && (
-          <Card className="border-primary">
-            <CardHeader>
-              <CardTitle>Agent Proposal</CardTitle>
-              <CardDescription>Actionable recommendation from RAG analysis</CardDescription>
+          <Card className="border-primary/50 shadow-lg animate-scale-in">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-medium">Agent Proposal</CardTitle>
+                <Badge className="font-mono text-xs">HITL</Badge>
+              </div>
+              <CardDescription className="text-xs">Actionable recommendation from RAG analysis</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-md bg-secondary p-4 text-foreground whitespace-pre-wrap">
+              <div className="rounded border border-border/50 bg-secondary/50 p-4 text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
                 {response.proposal}
               </div>
               
               {/* HITL Actions */}
-              <div className="flex gap-3 pt-2">
+              <div className="grid grid-cols-2 gap-3 pt-1">
                 <Button
                   onClick={() => handleApprove(true)}
                   variant="default"
-                  className="flex-1"
+                  size="sm"
+                  className="font-medium"
                 >
                   <CheckCircle2 className="mr-2 h-4 w-4" />
                   Approve
@@ -189,7 +211,8 @@ const Dashboard = () => {
                 <Button
                   onClick={() => handleApprove(false)}
                   variant="destructive"
-                  className="flex-1"
+                  size="sm"
+                  className="font-medium"
                 >
                   <XCircle className="mr-2 h-4 w-4" />
                   Dismiss
@@ -201,50 +224,55 @@ const Dashboard = () => {
 
         {/* Retrieved Trajectories */}
         {response && response.data.length > 0 && (
-          <Card className="bg-data-bg border-data-border">
-            <CardHeader>
-              <CardTitle>Retrieved Trajectories</CardTitle>
-              <CardDescription>
-                {response.data.length} anomalous trajectory{response.data.length !== 1 ? "s" : ""} retrieved
-              </CardDescription>
+          <Card className="bg-data-bg border-data-border/50 shadow-md animate-fade-in">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-medium">Retrieved Trajectories</CardTitle>
+                <Badge variant="secondary" className="font-mono text-xs">
+                  {response.data.length} anomal{response.data.length !== 1 ? "ies" : "y"}
+                </Badge>
+              </div>
+              <CardDescription className="text-xs">Indexed anomalous maritime trajectories</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {response.data.map((traj: Trajectory, index: number) => (
                   <div
                     key={index}
-                    className="rounded-lg border border-border bg-card p-4 space-y-2"
+                    className="rounded border border-border/50 bg-card/50 p-3.5 space-y-2 hover:border-border transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-semibold text-primary">
-                          MMSI: {traj.mmsi || "N/A"}
+                        <span className="font-mono text-xs font-semibold text-primary">
+                          {traj.mmsi || "N/A"}
                         </span>
                         {traj.shipType && (
-                          <Badge variant="secondary">{traj.shipType}</Badge>
+                          <Badge variant="secondary" className="text-xs px-2 py-0">
+                            {traj.shipType}
+                          </Badge>
                         )}
                       </div>
                       {traj.distance !== undefined && (
-                        <Badge variant="outline" className="font-mono">
-                          Distance: {traj.distance.toFixed(3)}
+                        <Badge variant="outline" className="font-mono text-[10px] px-1.5 py-0">
+                          d:{traj.distance.toFixed(3)}
                         </Badge>
                       )}
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-muted-foreground">
-                      <div>
-                        <span className="font-medium text-foreground">Time Range:</span>{" "}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 text-xs text-muted-foreground">
+                      <div className="font-mono">
+                        <span className="text-foreground/70">Time:</span>{" "}
                         {formatTimestamp(traj.timeStart)} → {formatTimestamp(traj.timeEnd)}
                       </div>
-                      <div>
-                        <span className="font-medium text-foreground">Track Length:</span>{" "}
-                        {traj.trackLength || "N/A"} points
+                      <div className="font-mono">
+                        <span className="text-foreground/70">Points:</span>{" "}
+                        {traj.trackLength || "N/A"}
                       </div>
                     </div>
                     
-                    <div className="text-sm">
-                      <span className="font-medium text-foreground">Centroid:</span>{" "}
-                      <span className="font-mono text-primary">
+                    <div className="text-xs font-mono">
+                      <span className="text-foreground/70">Centroid:</span>{" "}
+                      <span className="text-primary/90">
                         {formatCoordinates(traj.centroid)}
                       </span>
                     </div>
