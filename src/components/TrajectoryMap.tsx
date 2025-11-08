@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Trajectory } from "@/types";
@@ -8,6 +9,7 @@ import { Maximize2, Minimize2, Layers, Play, Pause, RotateCcw, ZoomIn, Flame, Ra
 import { toast } from "sonner";
 import { useRealtimeTelemetry } from "@/hooks/useRealtimeTelemetry";
 import type { LiveVessel } from "@/services/realtime";
+import { StatisticsOverlay } from "@/components/StatisticsOverlay";
 
 interface TrajectoryMapProps {
   trajectories: Trajectory[];
@@ -30,6 +32,8 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect, liveMode = false }: T
   const [showPaths, setShowPaths] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationProgress, setAnimationProgress] = useState(0);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [showReplayControls, setShowReplayControls] = useState(false);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
@@ -64,7 +68,7 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect, liveMode = false }: T
     };
   }, []);
 
-  // Handle live vessel updates
+  // Handle live vessel updates with smooth interpolation
   useEffect(() => {
     if (!liveMode || !mapInstanceRef.current || liveVessels.length === 0) return;
 
@@ -93,7 +97,25 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect, liveMode = false }: T
           
           liveMarkersRef.current.set(vessel.mmsi, marker);
         } else {
-          marker.setLatLng([vessel.lat, vessel.lon]);
+          // Smooth interpolation between positions
+          const currentPos = marker.getLatLng();
+          const targetPos = L.latLng(vessel.lat, vessel.lon);
+          
+          const steps = 10;
+          let step = 0;
+          
+          const interpolate = () => {
+            if (step < steps) {
+              const lat = currentPos.lat + (targetPos.lat - currentPos.lat) * (step / steps);
+              const lng = currentPos.lng + (targetPos.lng - currentPos.lng) * (step / steps);
+              marker?.setLatLng([lat, lng]);
+              step++;
+              requestAnimationFrame(interpolate);
+            }
+          };
+          
+          interpolate();
+          
           marker.setPopupContent(`
             <div class="text-sm">
               <strong class="text-primary">LIVE: MMSI ${vessel.mmsi}</strong><br/>
@@ -112,8 +134,9 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect, liveMode = false }: T
     if (!liveMode) {
       liveMarkersRef.current.forEach(marker => marker.remove());
       liveMarkersRef.current.clear();
+      setShowReplayControls(trajectories.length > 0);
     }
-  }, [liveMode]);
+  }, [liveMode, trajectories.length]);
 
   // Toggle fullscreen
   const toggleFullscreen = () => {
@@ -175,7 +198,7 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect, liveMode = false }: T
     }
   };
 
-  // Animate trajectory replay
+  // Animate trajectory replay with speed control
   const startAnimation = () => {
     if (isAnimating) {
       if (animationRef.current) {
@@ -186,12 +209,16 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect, liveMode = false }: T
     }
 
     setIsAnimating(true);
-    let progress = 0;
+    let progress = animationProgress;
     
     const animate = () => {
-      progress += 0.5;
+      progress += 0.5 * playbackSpeed;
       if (progress >= 100) {
-        progress = 0;
+        setIsAnimating(false);
+        toast.success("Replay complete", {
+          description: "Animation finished",
+        });
+        return;
       }
       
       setAnimationProgress(progress);
@@ -393,6 +420,13 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect, liveMode = false }: T
     <div className="relative w-full h-full group">
       <div ref={mapRef} className="absolute inset-0 rounded-lg border border-border/50 transition-all duration-300" />
       
+      {/* Statistics Overlay */}
+      <StatisticsOverlay 
+        trajectories={trajectories} 
+        liveVessels={liveVessels}
+        liveMode={liveMode}
+      />
+      
       {/* Legend */}
       <div className="absolute top-3 left-3 bg-card/95 backdrop-blur-sm border border-border/50 rounded-lg px-3 py-2 shadow-lg z-[1000] animate-fade-in">
         <div className="flex items-center gap-3 text-xs">
@@ -464,51 +498,81 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect, liveMode = false }: T
         </Button>
       </div>
 
-      {/* Animation Controls */}
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur-sm border border-border/50 rounded-lg px-4 py-2 shadow-lg z-[1000] flex items-center gap-3 animate-fade-in">
-        <Button
-          size="sm"
-          variant="secondary"
-          className="h-7 px-3 shadow-sm hover:scale-105 transition-all"
-          onClick={startAnimation}
+      {/* Animation Controls with Speed */}
+      {showReplayControls && !liveMode && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 20 }}
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur-sm border border-border/50 rounded-lg px-4 py-3 shadow-lg z-[1000]"
         >
-          {isAnimating ? (
-            <>
-              <Pause className="h-3 w-3 mr-1" />
-              <span className="text-xs">Pause</span>
-            </>
-          ) : (
-            <>
-              <Play className="h-3 w-3 mr-1" />
-              <span className="text-xs">Replay</span>
-            </>
-          )}
-        </Button>
-        
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 w-7 p-0 hover:scale-105 transition-all"
-          onClick={resetAnimation}
-          disabled={!isAnimating && animationProgress === 0}
-        >
-          <RotateCcw className="h-3 w-3" />
-        </Button>
+          <div className="flex items-center gap-3 mb-2">
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-7 px-3 shadow-sm"
+                onClick={startAnimation}
+              >
+                {isAnimating ? (
+                  <>
+                    <Pause className="h-3 w-3 mr-1" />
+                    <span className="text-xs">Pause</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-3 w-3 mr-1" />
+                    <span className="text-xs">Play</span>
+                  </>
+                )}
+              </Button>
+            </motion.div>
+            
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0"
+                onClick={resetAnimation}
+                disabled={!isAnimating && animationProgress === 0}
+              >
+                <RotateCcw className="h-3 w-3" />
+              </Button>
+            </motion.div>
 
-        {isAnimating && (
-          <div className="flex items-center gap-2 ml-2 pl-2 border-l border-border">
-            <div className="w-24 h-1 bg-secondary rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-primary transition-all duration-100"
-                style={{ width: `${animationProgress}%` }}
-              />
+            <div className="flex items-center gap-2 pl-2 border-l border-border">
+              <div className="w-32 h-1.5 bg-secondary rounded-full overflow-hidden">
+                <motion.div 
+                  className="h-full bg-primary"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${animationProgress}%` }}
+                  transition={{ duration: 0.2 }}
+                />
+              </div>
+              <span className="text-xs font-mono text-muted-foreground min-w-[3ch]">
+                {Math.round(animationProgress)}%
+              </span>
             </div>
-            <span className="text-xs font-mono text-muted-foreground min-w-[3ch]">
-              {Math.round(animationProgress)}%
-            </span>
           </div>
-        )}
-      </div>
+
+          {/* Speed Controls */}
+          <div className="flex items-center gap-2 pt-2 border-t border-border">
+            <span className="text-xs text-muted-foreground mr-1">Speed:</span>
+            {[0.5, 1, 2, 4].map((speed) => (
+              <motion.div key={speed} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                <Button
+                  size="sm"
+                  variant={playbackSpeed === speed ? "default" : "ghost"}
+                  onClick={() => setPlaybackSpeed(speed)}
+                  className="h-6 px-2 text-xs"
+                >
+                  {speed}x
+                </Button>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* Trajectory count badge */}
       <div className="absolute bottom-3 right-3 bg-card/95 backdrop-blur-sm border border-border/50 rounded-lg px-3 py-1.5 shadow-lg z-[1000] animate-fade-in">

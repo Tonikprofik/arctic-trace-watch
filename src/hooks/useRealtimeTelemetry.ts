@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { realtimeManager, type LiveTick, type LiveVessel } from "@/services/realtime";
 
 export const useRealtimeTelemetry = (enabled: boolean = true) => {
@@ -11,6 +12,9 @@ export const useRealtimeTelemetry = (enabled: boolean = true) => {
     if (!enabled) return;
 
     setIsConnected(true);
+    toast.success("Live stream connected", {
+      description: "Receiving real-time telemetry",
+    });
     
     const unsubscribe = realtimeManager.subscribeTelemetry(
       (tick: LiveTick) => {
@@ -21,11 +25,17 @@ export const useRealtimeTelemetry = (enabled: boolean = true) => {
         if (tick.done) {
           console.log("✅ Stream complete");
           setIsDone(true);
+          toast.success("Stream finished", {
+            description: "Live telemetry replay complete",
+          });
         }
       },
       (error) => {
         console.error("❌ Telemetry error:", error);
         setIsConnected(false);
+        toast.error("Stream disconnected", {
+          description: error.message,
+        });
       }
     );
 

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,7 +56,9 @@ const Dashboard = () => {
       // Save to database
       await saveQuery(prompt.trim(), result.proposal, result.traceId);
       
-      toast.success("Query completed");
+      toast.success("Query completed", {
+        description: "AI analysis ready for review",
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Query failed";
       setError(message);
@@ -98,7 +101,9 @@ const Dashboard = () => {
       // Update database with approval decision
       await updateQueryApproval(response.traceId, approved);
       
-      toast.success(approved ? "Proposal approved" : "Proposal dismissed");
+      toast.success(approved ? "Proposal approved" : "Proposal dismissed", {
+        description: approved ? "Action logged to feed" : "Recommendation dismissed",
+      });
       
       // Reset for next query
       setPrompt("");
@@ -274,113 +279,160 @@ const Dashboard = () => {
         )}
 
         {/* XAI Reasoning Trace */}
-        {response && response.trace.length > 0 && (
-          <Card className="glass border-primary/30 shadow-xl glow-sm animate-fade-in">
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-lg font-semibold text-primary flex items-center gap-2">
-                    <Brain className="h-5 w-5" />
-                    XAI Reasoning Trace
-                  </CardTitle>
-                  {liveMode && (
-                    <Badge variant="destructive" className="animate-pulse">
-                      <Radio className="w-3 h-3 mr-1" />
-                      LIVE
+        <AnimatePresence mode="wait">
+          {response && response.trace.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+            >
+              <Card className="glass border-primary/30 shadow-xl glow-sm">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-lg font-semibold text-primary flex items-center gap-2">
+                        <Brain className="h-5 w-5" />
+                        XAI Reasoning Trace
+                      </CardTitle>
+                      {liveMode && (
+                        <Badge variant="destructive" className="animate-pulse">
+                          <Radio className="w-3 h-3 mr-1" />
+                          LIVE
+                        </Badge>
+                      )}
+                    </div>
+                    <Badge variant="outline" className="font-mono text-xs px-2 py-1 bg-primary/10 border-primary/30 text-primary">
+                      Explainable AI
                     </Badge>
+                  </div>
+                  <CardDescription className="text-sm">Explainable AI decision pathway</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Trace Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Filter trace steps..."
+                      value={traceSearch}
+                      onChange={(e) => setTraceSearch(e.target.value)}
+                      className="pl-10 h-10 text-sm bg-input/30 border-border/50"
+                    />
+                  </div>
+                  
+                  <ul className="space-y-3 bg-trace-bg/30 border border-trace-border/30 rounded-lg p-5 backdrop-blur-sm">
+                    <AnimatePresence mode="popLayout">
+                      {filteredTrace.map((step, index) => (
+                        <motion.li
+                          key={index}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 20 }}
+                          transition={{ delay: index * 0.15, duration: 0.4 }}
+                          className="flex items-start gap-4 text-sm text-foreground/90"
+                        >
+                          <motion.span
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ delay: index * 0.15 + 0.2, type: "spring", stiffness: 300 }}
+                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-trace-step/20 border border-trace-step/40 text-xs font-mono font-bold text-primary shadow-sm"
+                          >
+                            {index + 1}
+                          </motion.span>
+                          <span className="pt-0.5 leading-relaxed">{step}</span>
+                        </motion.li>
+                      ))}
+                    </AnimatePresence>
+                  </ul>
+                  {response.timings && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: filteredTrace.length * 0.15 + 0.3 }}
+                      className="pt-4 border-t border-border/30 text-xs text-muted-foreground font-mono flex items-center justify-between"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="text-primary font-semibold">{response.timings.totalMs}ms</span>
+                        {response.timings.weaviateMs && (
+                          <span className="text-muted-foreground">• DB: {response.timings.weaviateMs}ms</span>
+                        )}
+                      </span>
+                      <code className="text-primary/70 text-[10px] bg-primary/5 px-2 py-1 rounded">{response.traceId}</code>
+                    </motion.div>
                   )}
-                </div>
-                <Badge variant="outline" className="font-mono text-xs px-2 py-1 bg-primary/10 border-primary/30 text-primary">
-                  Explainable AI
-                </Badge>
-              </div>
-              <CardDescription className="text-sm">Explainable AI decision pathway</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Trace Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Filter trace steps..."
-                  value={traceSearch}
-                  onChange={(e) => setTraceSearch(e.target.value)}
-                  className="pl-10 h-10 text-sm bg-input/30 border-border/50"
-                />
-              </div>
-              
-              <ul className="space-y-3 bg-trace-bg/30 border border-trace-border/30 rounded-lg p-5 backdrop-blur-sm">
-                {filteredTrace.map((step, index) => (
-                  <li
-                    key={index}
-                    className="flex items-start gap-4 text-sm text-foreground/90 animate-fade-in"
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-trace-step/20 border border-trace-step/40 text-xs font-mono font-bold text-primary shadow-sm">
-                      {index + 1}
-                    </span>
-                    <span className="pt-0.5 leading-relaxed">{step}</span>
-                  </li>
-                ))}
-              </ul>
-              {response.timings && (
-                <div className="pt-4 border-t border-border/30 text-xs text-muted-foreground font-mono flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <span className="text-primary font-semibold">{response.timings.totalMs}ms</span>
-                    {response.timings.weaviateMs && (
-                      <span className="text-muted-foreground">• DB: {response.timings.weaviateMs}ms</span>
-                    )}
-                  </span>
-                  <code className="text-primary/70 text-[10px] bg-primary/5 px-2 py-1 rounded">{response.traceId}</code>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Proposal */}
-        {response && response.proposal && (
-          <Card className="glass-strong border-accent/50 shadow-xl glow-sm animate-scale-in">
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-semibold text-accent flex items-center gap-2">
-                  <Brain className="h-5 w-5" />
-                  Agent Proposal
-                </CardTitle>
-                <Badge className="font-mono text-xs px-2 py-1 bg-accent/20 text-accent border-accent/30">
-                  HITL
-                </Badge>
-              </div>
-              <CardDescription className="text-sm">Actionable recommendation from RAG analysis</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="rounded-lg border border-border/50 bg-muted/30 p-6 text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed backdrop-blur-sm shadow-inner">
-                {response.proposal}
-              </div>
-              
-              {/* HITL Actions */}
-              <div className="grid grid-cols-2 gap-4 pt-2">
-                <Button
-                  onClick={() => handleApprove(true)}
-                  variant="default"
-                  size="default"
-                  className="font-semibold h-11 bg-success hover:bg-success/90 shadow-md hover:shadow-lg transition-all"
-                >
-                  <CheckCircle2 className="mr-2 h-5 w-5" />
-                  Approve
-                </Button>
-                <Button
-                  onClick={() => handleApprove(false)}
-                  variant="outline"
-                  size="default"
-                  className="font-semibold h-11 border-destructive/50 text-destructive hover:bg-destructive/10 shadow-md hover:shadow-lg transition-all"
-                >
-                  <XCircle className="mr-2 h-5 w-5" />
-                  Dismiss
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        <AnimatePresence mode="wait">
+          {response && response.proposal && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -20 }}
+              transition={{ delay: 0.6, duration: 0.5, type: "spring", stiffness: 200 }}
+            >
+              <Card className="glass-strong border-accent/50 shadow-xl glow-sm">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg font-semibold text-accent flex items-center gap-2">
+                      <Brain className="h-5 w-5" />
+                      Agent Proposal
+                    </CardTitle>
+                    <Badge className="font-mono text-xs px-2 py-1 bg-accent/20 text-accent border-accent/30">
+                      HITL
+                    </Badge>
+                  </div>
+                  <CardDescription className="text-sm">Actionable recommendation from RAG analysis</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.8 }}
+                    className="rounded-lg border border-border/50 bg-muted/30 p-6 text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed backdrop-blur-sm shadow-inner"
+                  >
+                    {response.proposal}
+                  </motion.div>
+                  
+                  {/* HITL Actions */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1.0 }}
+                    className="grid grid-cols-2 gap-4 pt-2"
+                  >
+                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                      <Button
+                        onClick={() => handleApprove(true)}
+                        variant="default"
+                        size="default"
+                        className="w-full font-semibold h-11 bg-success hover:bg-success/90 shadow-md hover:shadow-lg transition-all"
+                      >
+                        <CheckCircle2 className="mr-2 h-5 w-5" />
+                        Approve
+                      </Button>
+                    </motion.div>
+                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                      <Button
+                        onClick={() => handleApprove(false)}
+                        variant="outline"
+                        size="default"
+                        className="w-full font-semibold h-11 border-destructive/50 text-destructive hover:bg-destructive/10 shadow-md hover:shadow-lg transition-all"
+                      >
+                        <XCircle className="mr-2 h-5 w-5" />
+                        Dismiss
+                      </Button>
+                    </motion.div>
+                  </motion.div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Map Visualization */}
         {response && response.data.length > 0 && (
