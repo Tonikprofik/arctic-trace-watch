@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Trajectory } from "@/types";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Maximize2, Minimize2, Layers, Play, Pause, RotateCcw, ZoomIn, Flame } from "lucide-react";
+import { toast } from "sonner";
 
 interface TrajectoryMapProps {
   trajectories: Trajectory[];
@@ -13,7 +15,15 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect }: TrajectoryMapProps)
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
+  const heatLayerRef = useRef<L.LayerGroup | null>(null);
+  const animationRef = useRef<number | null>(null);
+  
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showPaths, setShowPaths] = useState(true);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [animationProgress, setAnimationProgress] = useState(0);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
@@ -32,16 +42,114 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect }: TrajectoryMapProps)
       maxZoom: 20,
     }).addTo(mapInstanceRef.current);
 
-    // Initialize layer group for trajectories
+    // Initialize layer groups
     layerGroupRef.current = L.layerGroup().addTo(mapInstanceRef.current);
+    heatLayerRef.current = L.layerGroup();
 
     return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
     };
   }, []);
+
+  // Toggle fullscreen
+  const toggleFullscreen = () => {
+    if (!mapRef.current) return;
+    
+    if (!document.fullscreenElement) {
+      mapRef.current.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  };
+
+  // Zoom to fit all trajectories
+  const zoomToFit = () => {
+    if (!mapInstanceRef.current || trajectories.length === 0) return;
+    
+    const bounds: L.LatLngBoundsExpression = [];
+    trajectories.forEach(traj => {
+      if (traj.centroid) {
+        bounds.push([traj.centroid.latitude, traj.centroid.longitude]);
+      }
+    });
+    
+    if (bounds.length > 0) {
+      mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
+      toast.success("Zoomed to fit all trajectories");
+    }
+  };
+
+  // Toggle heatmap layer
+  const toggleHeatmap = () => {
+    if (!mapInstanceRef.current || !heatLayerRef.current) return;
+    
+    if (showHeatmap) {
+      heatLayerRef.current.removeFrom(mapInstanceRef.current);
+      setShowHeatmap(false);
+    } else {
+      // Create heatmap effect using circle markers
+      heatLayerRef.current.clearLayers();
+      trajectories.forEach(traj => {
+        if (traj.centroid) {
+          const circle = L.circle(
+            [traj.centroid.latitude, traj.centroid.longitude],
+            {
+              radius: 5000,
+              fillColor: "hsl(0, 65%, 55%)",
+              color: "transparent",
+              fillOpacity: 0.3,
+            }
+          );
+          circle.addTo(heatLayerRef.current!);
+        }
+      });
+      heatLayerRef.current.addTo(mapInstanceRef.current);
+      setShowHeatmap(true);
+      toast.success("Heatmap layer enabled");
+    }
+  };
+
+  // Animate trajectory replay
+  const startAnimation = () => {
+    if (isAnimating) {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      setIsAnimating(false);
+      return;
+    }
+
+    setIsAnimating(true);
+    let progress = 0;
+    
+    const animate = () => {
+      progress += 0.5;
+      if (progress >= 100) {
+        progress = 0;
+      }
+      
+      setAnimationProgress(progress);
+      animationRef.current = requestAnimationFrame(animate);
+    };
+    
+    animate();
+  };
+
+  const resetAnimation = () => {
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+    setIsAnimating(false);
+    setAnimationProgress(0);
+  };
 
   useEffect(() => {
     if (!mapInstanceRef.current || !layerGroupRef.current) return;
@@ -124,13 +232,14 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect }: TrajectoryMapProps)
       bounds.push(latLng);
 
       // Draw trajectory path if start and end locations exist
-      if (traj.startLocation && traj.endLocation) {
+      if (showPaths && traj.startLocation && traj.endLocation) {
         const pathCoords: L.LatLngExpression[] = [
           [traj.startLocation.latitude, traj.startLocation.longitude],
           [traj.centroid.latitude, traj.centroid.longitude],
           [traj.endLocation.latitude, traj.endLocation.longitude],
         ];
 
+        // Main path
         const polyline = L.polyline(pathCoords, {
           color: isSelected ? "hsl(142, 76%, 45%)" : "hsl(210, 90%, 58%)",
           weight: isSelected ? 3 : 2,
@@ -140,34 +249,78 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect }: TrajectoryMapProps)
 
         polyline.addTo(layerGroupRef.current!);
 
-        // Add start marker
+        // Animated progress indicator
+        if (isAnimating && animationProgress > 0) {
+          const progressPoint = animationProgress / 100;
+          let animatedCoord: L.LatLngExpression;
+          
+          if (progressPoint < 0.5) {
+            const t = progressPoint * 2;
+            animatedCoord = [
+              traj.startLocation.latitude + (traj.centroid.latitude - traj.startLocation.latitude) * t,
+              traj.startLocation.longitude + (traj.centroid.longitude - traj.startLocation.longitude) * t,
+            ];
+          } else {
+            const t = (progressPoint - 0.5) * 2;
+            animatedCoord = [
+              traj.centroid.latitude + (traj.endLocation.latitude - traj.centroid.latitude) * t,
+              traj.centroid.longitude + (traj.endLocation.longitude - traj.centroid.longitude) * t,
+            ];
+          }
+
+          const animMarker = L.circleMarker(animatedCoord, {
+            radius: 5,
+            fillColor: "hsl(210, 90%, 58%)",
+            color: "#fff",
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 1,
+          });
+          animMarker.addTo(layerGroupRef.current!);
+        }
+
+        // Add start marker with pulse effect
         const startMarker = L.circleMarker(
           [traj.startLocation.latitude, traj.startLocation.longitude],
           {
-            radius: 4,
+            radius: 5,
             fillColor: "hsl(142, 76%, 45%)",
             color: "#fff",
-            weight: 1,
+            weight: 2,
             opacity: 1,
             fillOpacity: 0.8,
           }
         );
-        startMarker.bindPopup(`<div class="text-xs p-1">Start Position</div>`);
+        startMarker.bindPopup(`
+          <div class="text-xs p-2">
+            <div class="font-semibold text-success mb-1">Start Position</div>
+            <div class="font-mono text-[10px] text-muted-foreground">
+              ${traj.startLocation.latitude.toFixed(4)}°N, ${traj.startLocation.longitude.toFixed(4)}°E
+            </div>
+          </div>
+        `);
         startMarker.addTo(layerGroupRef.current!);
 
         // Add end marker
         const endMarker = L.circleMarker(
           [traj.endLocation.latitude, traj.endLocation.longitude],
           {
-            radius: 4,
+            radius: 5,
             fillColor: "hsl(0, 65%, 55%)",
             color: "#fff",
-            weight: 1,
+            weight: 2,
             opacity: 1,
             fillOpacity: 0.8,
           }
         );
-        endMarker.bindPopup(`<div class="text-xs p-1">End Position</div>`);
+        endMarker.bindPopup(`
+          <div class="text-xs p-2">
+            <div class="font-semibold text-destructive mb-1">End Position</div>
+            <div class="font-mono text-[10px] text-muted-foreground">
+              ${traj.endLocation.latitude.toFixed(4)}°N, ${traj.endLocation.longitude.toFixed(4)}°E
+            </div>
+          </div>
+        `);
         endMarker.addTo(layerGroupRef.current!);
       }
     });
@@ -176,25 +329,124 @@ const TrajectoryMap = ({ trajectories, onTrajectorySelect }: TrajectoryMapProps)
     if (bounds.length > 0) {
       mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
     }
-  }, [trajectories, selectedIndex]);
+  }, [trajectories, selectedIndex, showPaths, isAnimating, animationProgress]);
 
   return (
-    <div className="relative w-full h-full">
-      <div ref={mapRef} className="absolute inset-0 rounded-lg border border-border/50" />
-      <div className="absolute top-3 left-3 bg-card/95 backdrop-blur-sm border border-border/50 rounded px-3 py-2 shadow-md z-[1000]">
+    <div className="relative w-full h-full group">
+      <div ref={mapRef} className="absolute inset-0 rounded-lg border border-border/50 transition-all duration-300" />
+      
+      {/* Legend */}
+      <div className="absolute top-3 left-3 bg-card/95 backdrop-blur-sm border border-border/50 rounded-lg px-3 py-2 shadow-lg z-[1000] animate-fade-in">
         <div className="flex items-center gap-3 text-xs">
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-success"></div>
+            <div className="w-3 h-3 rounded-full bg-success shadow-sm"></div>
             <span className="text-muted-foreground">Start</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-primary"></div>
+            <div className="w-3 h-3 rounded-full bg-primary shadow-sm"></div>
             <span className="text-muted-foreground">Centroid</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-destructive"></div>
+            <div className="w-3 h-3 rounded-full bg-destructive shadow-sm"></div>
             <span className="text-muted-foreground">End</span>
           </div>
+        </div>
+      </div>
+
+      {/* Map Controls */}
+      <div className="absolute top-3 right-3 flex flex-col gap-2 z-[1000] animate-fade-in">
+        <Button
+          size="sm"
+          variant="secondary"
+          className="h-8 w-8 p-0 shadow-lg bg-card/95 backdrop-blur-sm hover:bg-card hover:scale-110 transition-all"
+          onClick={zoomToFit}
+          title="Zoom to fit"
+        >
+          <ZoomIn className="h-4 w-4" />
+        </Button>
+        
+        <Button
+          size="sm"
+          variant="secondary"
+          className={`h-8 w-8 p-0 shadow-lg bg-card/95 backdrop-blur-sm hover:scale-110 transition-all ${showPaths ? 'bg-primary/20 border-primary' : 'hover:bg-card'}`}
+          onClick={() => setShowPaths(!showPaths)}
+          title="Toggle paths"
+        >
+          <Layers className="h-4 w-4" />
+        </Button>
+        
+        <Button
+          size="sm"
+          variant="secondary"
+          className={`h-8 w-8 p-0 shadow-lg bg-card/95 backdrop-blur-sm hover:scale-110 transition-all ${showHeatmap ? 'bg-destructive/20 border-destructive' : 'hover:bg-card'}`}
+          onClick={toggleHeatmap}
+          title="Toggle heatmap"
+        >
+          <Flame className="h-4 w-4" />
+        </Button>
+        
+        <Button
+          size="sm"
+          variant="secondary"
+          className="h-8 w-8 p-0 shadow-lg bg-card/95 backdrop-blur-sm hover:bg-card hover:scale-110 transition-all"
+          onClick={toggleFullscreen}
+          title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+        >
+          {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </Button>
+      </div>
+
+      {/* Animation Controls */}
+      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur-sm border border-border/50 rounded-lg px-4 py-2 shadow-lg z-[1000] flex items-center gap-3 animate-fade-in">
+        <Button
+          size="sm"
+          variant="secondary"
+          className="h-7 px-3 shadow-sm hover:scale-105 transition-all"
+          onClick={startAnimation}
+        >
+          {isAnimating ? (
+            <>
+              <Pause className="h-3 w-3 mr-1" />
+              <span className="text-xs">Pause</span>
+            </>
+          ) : (
+            <>
+              <Play className="h-3 w-3 mr-1" />
+              <span className="text-xs">Replay</span>
+            </>
+          )}
+        </Button>
+        
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 w-7 p-0 hover:scale-105 transition-all"
+          onClick={resetAnimation}
+          disabled={!isAnimating && animationProgress === 0}
+        >
+          <RotateCcw className="h-3 w-3" />
+        </Button>
+
+        {isAnimating && (
+          <div className="flex items-center gap-2 ml-2 pl-2 border-l border-border">
+            <div className="w-24 h-1 bg-secondary rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-primary transition-all duration-100"
+                style={{ width: `${animationProgress}%` }}
+              />
+            </div>
+            <span className="text-xs font-mono text-muted-foreground min-w-[3ch]">
+              {Math.round(animationProgress)}%
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Trajectory count badge */}
+      <div className="absolute bottom-3 right-3 bg-card/95 backdrop-blur-sm border border-border/50 rounded-lg px-3 py-1.5 shadow-lg z-[1000] animate-fade-in">
+        <div className="text-xs font-mono">
+          <span className="text-muted-foreground">Trajectories:</span>{" "}
+          <span className="text-primary font-semibold">{trajectories.length}</span>
         </div>
       </div>
     </div>

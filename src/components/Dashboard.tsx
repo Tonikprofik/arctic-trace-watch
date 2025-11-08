@@ -393,26 +393,33 @@ const Dashboard = () => {
               </CardDescription>
             </CardHeader>
             {showMap && (
-              <CardContent>
-                <div className="h-[500px] rounded-lg overflow-hidden">
+              <CardContent className="space-y-3">
+                <div className="h-[500px] rounded-lg overflow-hidden border border-border/30 bg-card/30 relative group">
                   <TrajectoryMap 
                     trajectories={response.data}
                     onTrajectorySelect={setSelectedTrajectory}
                   />
                 </div>
                 {selectedTrajectory && (
-                  <div className="mt-3 p-3 rounded-lg border border-border/50 bg-card/30">
-                    <div className="text-xs font-semibold text-primary mb-2">
+                  <div className="p-3 rounded-lg border border-primary/30 bg-primary/5 animate-scale-in">
+                    <div className="text-xs font-semibold text-primary mb-2 flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
                       Selected: MMSI {selectedTrajectory.mmsi || "N/A"}
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <span className="text-muted-foreground">Type:</span>{" "}
-                        {selectedTrajectory.shipType || "Unknown"}
+                        <span className="font-medium text-foreground">{selectedTrajectory.shipType || "Unknown"}</span>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Points:</span>{" "}
-                        {selectedTrajectory.trackLength || "N/A"}
+                        <span className="font-medium text-foreground">{selectedTrajectory.trackLength || "N/A"}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">Time Range:</span>{" "}
+                        <div className="font-mono text-[10px] text-foreground mt-0.5">
+                          {formatTimestamp(selectedTrajectory.timeStart)} → {formatTimestamp(selectedTrajectory.timeEnd)}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -503,7 +510,12 @@ const Dashboard = () => {
                 {filteredAndSortedTrajectories.map((traj: Trajectory, index: number) => (
                   <div
                     key={index}
-                    className="rounded border border-border/50 bg-card/50 p-3.5 space-y-2 hover:border-border transition-colors"
+                    onClick={() => setSelectedTrajectory(traj)}
+                    className={`rounded-lg border p-3.5 space-y-2 transition-all duration-200 cursor-pointer hover:scale-[1.02] hover:shadow-md ${
+                      selectedTrajectory?.mmsi === traj.mmsi 
+                        ? 'border-primary/50 bg-primary/10 shadow-lg' 
+                        : 'border-border/50 bg-card/50 hover:border-border'
+                    }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
