@@ -68,7 +68,6 @@ Keep the analysis concise but thorough, suitable for immediate operational use.`
           { role: 'user', content: userMessage }
         ],
         max_completion_tokens: 1000,
-        temperature: 0.7,
       }),
     });
 
