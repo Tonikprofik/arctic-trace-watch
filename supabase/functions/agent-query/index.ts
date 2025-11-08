@@ -90,26 +90,70 @@ serve(async (req) => {
 
     const trace: string[] = ["RAG: Querying Weaviate..."];
     const tW0 = performance.now();
+    let tW1 = performance.now();
     
-    const r = await fetch(`${WEAVIATE_URL}/v1/graphql`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(OPENAI_API_KEY ? { "X-OpenAI-Api-Key": OPENAI_API_KEY } : {}),
-      },
-      body: JSON.stringify({ query: q, variables: null }),
-    });
+    let objs: any[] = [];
+    let proposal = "";
     
-    const j = await r.json();
-    const tW1 = performance.now();
-    
-    if (!r.ok) {
-      throw new Error(`Weaviate ${r.status}: ${JSON.stringify(j)}`);
-    }
+    try {
+      // Add timeout to Weaviate fetch (5 seconds)
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      
+      const r = await fetch(`${WEAVIATE_URL}/v1/graphql`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(OPENAI_API_KEY ? { "X-OpenAI-Api-Key": OPENAI_API_KEY } : {}),
+        },
+        body: JSON.stringify({ query: q, variables: null }),
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeout);
+      const j = await r.json();
+      tW1 = performance.now();
+      
+      if (!r.ok) {
+        throw new Error(`Weaviate ${r.status}: ${JSON.stringify(j)}`);
+      }
 
-    const objs = j?.data?.Get?.SEAuAISAnomaly || [];
-    const gen = objs[0]?._additional?.generate?.groupedResult || "";
-    const proposal = gen || "No relevant anomalous trajectories found.";
+      objs = j?.data?.Get?.SEAuAISAnomaly || [];
+      const gen = objs[0]?._additional?.generate?.groupedResult || "";
+      proposal = gen || "No relevant anomalous trajectories found.";
+      
+    } catch (weaviateError) {
+      tW1 = performance.now();
+      console.warn("Weaviate unavailable, using demo data:", weaviateError);
+      
+      // Return demo data when Weaviate is unavailable
+      objs = [
+        {
+          _additional: { id: "demo-1", distance: 0.15 },
+          mmsi: 211002340,
+          shipType: "Other",
+          trackLength: 28,
+          timeStart: "2024-01-15T08:00:00Z",
+          timeEnd: "2024-01-15T10:30:00Z",
+          centroid: { latitude: 78.2232, longitude: 15.6469 },
+          startLocation: { latitude: 78.1, longitude: 15.5 },
+          endLocation: { latitude: 78.3, longitude: 15.7 },
+        },
+        {
+          _additional: { id: "demo-2", distance: 0.18 },
+          mmsi: 211156800,
+          shipType: "Service",
+          trackLength: 45,
+          timeStart: "2024-01-15T09:00:00Z",
+          timeEnd: "2024-01-15T12:00:00Z",
+          centroid: { latitude: 78.15, longitude: 15.8 },
+          startLocation: { latitude: 78.0, longitude: 15.6 },
+          endLocation: { latitude: 78.2, longitude: 16.0 },
+        },
+      ];
+      
+      proposal = `🎭 DEMO MODE: Weaviate backend unavailable\n\n**Showing sample anomalous trajectories near Svalbard:**\n- 2 vessels with atypical movement patterns detected\n- Ship types: Other, Service\n- Pattern deviations in timing and routing\n\n**Note:** This is demonstration data. Configure WEAVIATE_URL secret to connect to a live Weaviate instance.`;
+    }
 
     trace.push("GEN: OpenAI summary generated.");
     trace.push("HITL: Formulating proposal for human.");
