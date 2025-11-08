@@ -2,3 +2,9 @@ project_id = "xfkzwcfzmottmyooysbj"
 
 [functions.analyze-threat]
 verify_jwt = false
+
+[functions.agent-query]
+verify_jwt = false
+
+[functions.agent-approve]
+verify_jwt = false
