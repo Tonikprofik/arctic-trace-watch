@@ -7,6 +7,8 @@ import { Loader2, CheckCircle2, XCircle, Activity } from "lucide-react";
 import { queryAgent, approveHitl } from "@/api/api";
 import type { QueryResponse, Trajectory } from "@/types";
 import { toast } from "sonner";
+import ActivityFeed from "@/components/ActivityFeed";
+import { saveQuery, updateQueryApproval } from "@/services/queryHistory";
 
 const Dashboard = () => {
   const [prompt, setPrompt] = useState("");
@@ -27,6 +29,10 @@ const Dashboard = () => {
     try {
       const result = await queryAgent({ prompt: prompt.trim() });
       setResponse(result);
+      
+      // Save to database
+      await saveQuery(prompt.trim(), result.proposal, result.traceId);
+      
       toast.success("Query completed");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Query failed";
@@ -47,6 +53,10 @@ const Dashboard = () => {
         approved,
         traceId: response.traceId,
       });
+      
+      // Update database with approval decision
+      await updateQueryApproval(response.traceId, approved);
+      
       toast.success(approved ? "Proposal approved" : "Proposal dismissed");
       
       // Reset for next query
@@ -73,30 +83,38 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="mx-auto max-w-7xl px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Activity className="h-7 w-7 text-primary" />
-              <div>
-                <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                  Observable C<sub className="text-sm">2</sub>
-                </h1>
-                <p className="text-xs text-muted-foreground font-mono">
-                  Copenhagen Defense • Maritime Command & Control
-                </p>
-              </div>
-            </div>
-            <Badge variant="outline" className="font-mono text-xs">
-              Svalbard AIS
-            </Badge>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-background flex">
+      {/* Activity Feed Sidebar */}
+      <aside className="w-80 border-r border-border/50 bg-card/30 backdrop-blur-sm sticky top-0 h-screen overflow-hidden">
+        <ActivityFeed />
+      </aside>
 
-      <div className="mx-auto max-w-7xl px-6 py-8 space-y-6">
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+          <div className="px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Activity className="h-7 w-7 text-primary" />
+                <div>
+                  <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                    Observable C<sub className="text-sm">2</sub>
+                  </h1>
+                  <p className="text-xs text-muted-foreground font-mono">
+                    Copenhagen Defense • Maritime Command & Control
+                  </p>
+                </div>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs">
+                Svalbard AIS
+              </Badge>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-5xl px-6 py-8 space-y-6">
 
         {/* Query Input */}
         <Card className="shadow-md border-border/50">
@@ -282,6 +300,8 @@ const Dashboard = () => {
             </CardContent>
           </Card>
         )}
+          </div>
+        </div>
       </div>
     </div>
   );

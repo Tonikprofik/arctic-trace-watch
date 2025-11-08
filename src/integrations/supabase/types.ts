@@ -14,7 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      query_history: {
+        Row: {
+          approved: boolean | null
+          created_at: string
+          id: string
+          prompt: string
+          proposal: string
+          rationale: string | null
+          trace_id: string
+        }
+        Insert: {
+          approved?: boolean | null
+          created_at?: string
+          id?: string
+          prompt: string
+          proposal: string
+          rationale?: string | null
+          trace_id: string
+        }
+        Update: {
+          approved?: boolean | null
+          created_at?: string
+          id?: string
+          prompt?: string
+          proposal?: string
+          rationale?: string | null
+          trace_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
