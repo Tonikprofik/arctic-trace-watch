@@ -161,14 +161,12 @@ const Dashboard = () => {
       return;
     }
 
-    // Check system health (non-blocking warning)
-    performHealthCheck().then((isHealthy) => {
-      if (!isHealthy) {
-        toast.warning("System may be degraded", {
-          description: "Query will proceed, but results may be limited"
-        });
-      }
-    });
+    // Check system health before querying
+    const isHealthy = await performHealthCheck();
+    if (!isHealthy) {
+      setError("System not ready. Please wait and try again.");
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -197,16 +195,9 @@ const Dashboard = () => {
       // Save to database
       await saveQuery(prompt.trim(), result.proposal, result.traceId);
       
-      // Check if using mock data
-      if ((result as any).mock) {
-        toast.warning("Using demo data", {
-          description: "Weaviate unavailable - showing mock trajectories for demo",
-        });
-      } else {
-        toast.success("Query completed", {
-          description: "AI analysis ready for review",
-        });
-      }
+      toast.success("Query completed", {
+        description: "AI analysis ready for review",
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Query failed";
       setError(message);

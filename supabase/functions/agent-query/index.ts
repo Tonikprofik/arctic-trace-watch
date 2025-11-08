@@ -155,88 +155,12 @@ serve(async (req) => {
       }
     );
   } catch (e) {
-    console.error("Error in agent-query (falling back to mock data):", e);
-    
-    // Fallback mock data for demo when Weaviate unavailable
-    const trace = [
-      "RAG: Querying Weaviate...",
-      "GEN: OpenAI summary generated.",
-      "HITL: Formulating proposal for human."
-    ];
-    
-    const mockData = [
-      {
-        id: "mock-1",
-        mmsi: 273123456,
-        shipType: "Commercial",
-        trackLength: 12,
-        timeStart: "2022-01-07T10:00:00Z",
-        timeEnd: "2022-01-07T12:00:00Z",
-        centroid: { latitude: 78.24, longitude: 15.665 },
-        startLocation: { latitude: 78.22, longitude: 15.63 },
-        endLocation: { latitude: 78.26, longitude: 15.70 },
-        distance: 0.15
-      },
-      {
-        id: "mock-2",
-        mmsi: 273654321,
-        shipType: "Service",
-        trackLength: 9,
-        timeStart: "2022-01-07T11:10:00Z",
-        timeEnd: "2022-01-07T12:40:00Z",
-        centroid: { latitude: 78.265, longitude: 15.685 },
-        startLocation: { latitude: 78.25, longitude: 15.65 },
-        endLocation: { latitude: 78.28, longitude: 15.72 },
-        distance: 0.18
-      },
-      {
-        id: "mock-3",
-        mmsi: 257987654,
-        shipType: "Fishing",
-        trackLength: 15,
-        timeStart: "2022-01-08T06:30:00Z",
-        timeEnd: "2022-01-08T09:10:00Z",
-        centroid: { latitude: 78.205, longitude: 15.560 },
-        startLocation: { latitude: 78.18, longitude: 15.50 },
-        endLocation: { latitude: 78.23, longitude: 15.62 },
-        distance: 0.22
-      }
-    ];
-    
-    const mockProposal = `**THREAT ASSESSMENT - SVALBARD MARITIME ZONE**
-
-Three anomalous vessel trajectories detected near Longyearbyen (78.22°N, 15.65°E):
-
-**HIGH PRIORITY:**
-- MMSI 257987654 (Fishing): Unusual speed/course patterns during early morning hours (06:30-09:10 UTC). Track length 15 points suggests deliberate maneuvering. Distance from expected route: 0.22.
-
-**MEDIUM PRIORITY:**
-- MMSI 273123456 (Commercial): Deviation from standard shipping lane. 12-point track shows sustained anomalous behavior over 2-hour period.
-- MMSI 273654321 (Service): Irregular movements near protected waters. 9-point track with course changes (90°-120°).
-
-**RECOMMENDATION:** 
-1. Initiate visual surveillance of MMSI 257987654 (highest anomaly score)
-2. Request identification/intent from all three vessels via VHF Channel 16
-3. Monitor for additional anomalous behavior in next 4-hour window
-
-**UNCERTAINTY:** Real-time AIS data not available. Assessment based on historical anomaly patterns.`;
-
+    console.error("Error in agent-query:", e);
     return new Response(
-      JSON.stringify({
-        proposal: mockProposal,
-        data: mockData,
-        trace,
-        traceId,
-        timings: { totalMs: performance.now() - t0, weaviateMs: 0 },
-        mock: true
-      }),
+      JSON.stringify({ error: String(e), traceId }),
       {
-        status: 200,
-        headers: {
-          ...cors,
-          "Content-Type": "application/json",
-          "X-Trace-Id": traceId,
-        },
+        status: 500,
+        headers: { ...cors, "Content-Type": "application/json" },
       }
     );
   }

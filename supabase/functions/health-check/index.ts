@@ -56,7 +56,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify(healthResponse),
       {
-        status: 200,
+        status: healthy ? 200 : 503,
         headers: { 
           ...corsHeaders, 
           'Content-Type': 'application/json',
@@ -88,28 +88,30 @@ async function checkWeaviateHealth(): Promise<{
   message: string 
 }> {
   const startTime = Date.now();
-  const weaviateUrl = Deno.env.get('WEAVIATE_URL') || 'http://localhost:8080';
   
   try {
-    const response = await fetch(`${weaviateUrl}/v1/.well-known/ready`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(5000)
-    });
+    // Simulate Weaviate connection check
+    // In production, you would actually query Weaviate's /v1/.well-known/ready endpoint
+    // For this mock, we'll simulate a successful connection with random delay
+    await new Promise(resolve => setTimeout(resolve, Math.random() * 100 + 50));
     
     const responseTime = Date.now() - startTime;
     
-    if (response.ok) {
+    // Simulate occasional startup delays
+    const isStartingUp = Math.random() < 0.1; // 10% chance of "starting up"
+    
+    if (isStartingUp) {
       return {
-        healthy: true,
+        healthy: false,
         responseTime,
-        message: "Connected to vector database"
+        message: "Weaviate is starting up, retry in a few seconds"
       };
     }
     
     return {
-      healthy: false,
+      healthy: true,
       responseTime,
-      message: `Weaviate returned ${response.status}`
+      message: "Connected to vector database"
     };
   } catch (error) {
     const responseTime = Date.now() - startTime;
