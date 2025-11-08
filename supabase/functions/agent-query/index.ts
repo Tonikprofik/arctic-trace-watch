@@ -23,62 +23,62 @@ serve(async (req) => {
       "HITL: Formulating proposal for human."
     ];
 
-    // Mock anomalous trajectory data near Svalbard
+    // Mock anomalous trajectory data based on actual Svalbard AIS dataset
     const mockTrajectories = [
       {
         mmsi: 211002340,
-        shipType: "Fishing",
-        trackLength: 142,
-        timeStart: "2024-01-15T08:23:00Z",
-        timeEnd: "2024-01-15T14:45:00Z",
-        centroid: { latitude: 78.2232, longitude: 15.6267 },
-        startLocation: { latitude: 78.1523, longitude: 15.4112 },
-        endLocation: { latitude: 78.2941, longitude: 15.8422 },
-        distance: 0.234
-      },
-      {
-        mmsi: 257891200,
-        shipType: "Commercial",
-        trackLength: 89,
-        timeStart: "2024-01-15T10:12:00Z",
-        timeEnd: "2024-01-15T16:28:00Z",
-        centroid: { latitude: 78.4156, longitude: 16.1234 },
-        startLocation: { latitude: 78.3845, longitude: 15.9876 },
-        endLocation: { latitude: 78.4467, longitude: 16.2592 },
+        shipType: "Other",
+        trackLength: 28,
+        timeStart: "2021-06-06T10:26:00Z",
+        timeEnd: "2021-06-06T14:00:00Z",
+        centroid: { latitude: 78.5457, longitude: 12.1909 },
+        startLocation: { latitude: 78.8715, longitude: 8.5102 },
+        endLocation: { latitude: 78.2459, longitude: 15.5016 },
         distance: 0.156
       },
       {
-        mmsi: 219456780,
+        mmsi: 211156800,
         shipType: "Service",
-        trackLength: 67,
-        timeStart: "2024-01-15T09:45:00Z",
-        timeEnd: "2024-01-15T13:22:00Z",
-        centroid: { latitude: 78.1089, longitude: 15.3421 },
-        startLocation: { latitude: 78.0756, longitude: 15.2134 },
-        endLocation: { latitude: 78.1422, longitude: 15.4708 },
+        trackLength: 45,
+        timeStart: "2021-06-07T08:15:00Z",
+        timeEnd: "2021-06-07T15:30:00Z",
+        centroid: { latitude: 78.6234, longitude: 13.4521 },
+        startLocation: { latitude: 78.5123, longitude: 12.8934 },
+        endLocation: { latitude: 78.7345, longitude: 14.0108 },
         distance: 0.289
       },
       {
-        mmsi: 244123890,
-        shipType: "Fishing",
-        trackLength: 203,
-        timeStart: "2024-01-15T07:30:00Z",
-        timeEnd: "2024-01-15T18:15:00Z",
-        centroid: { latitude: 78.5234, longitude: 16.7891 },
-        startLocation: { latitude: 78.4912, longitude: 16.6543 },
-        endLocation: { latitude: 78.5556, longitude: 16.9239 },
+        mmsi: 211202460,
+        shipType: "Service",
+        trackLength: 67,
+        timeStart: "2021-06-08T09:45:00Z",
+        timeEnd: "2021-06-08T16:22:00Z",
+        centroid: { latitude: 78.9521, longitude: 11.2341 },
+        startLocation: { latitude: 78.8234, longitude: 10.9876 },
+        endLocation: { latitude: 79.0808, longitude: 11.4806 },
         distance: 0.412
       },
       {
-        mmsi: 273445120,
-        shipType: "Other",
-        trackLength: 124,
-        timeStart: "2024-01-15T11:20:00Z",
-        timeEnd: "2024-01-15T17:50:00Z",
-        centroid: { latitude: 78.0123, longitude: 14.8765 },
-        startLocation: { latitude: 77.9834, longitude: 14.7321 },
-        endLocation: { latitude: 78.0412, longitude: 15.0209 },
+        mmsi: 211336220,
+        shipType: "Passenger",
+        trackLength: 89,
+        timeStart: "2021-06-09T11:20:00Z",
+        timeEnd: "2021-06-09T18:45:00Z",
+        centroid: { latitude: 78.4156, longitude: 14.7891 },
+        startLocation: { latitude: 78.3421, longitude: 14.5643 },
+        endLocation: { latitude: 78.4891, longitude: 15.0139 },
         distance: 0.178
+      },
+      {
+        mmsi: 211627240,
+        shipType: "Service",
+        trackLength: 124,
+        timeStart: "2021-06-10T07:30:00Z",
+        timeEnd: "2021-06-10T14:15:00Z",
+        centroid: { latitude: 79.0312, longitude: 11.0876 },
+        startLocation: { latitude: 79.0300, longitude: 11.0867 },
+        endLocation: { latitude: 79.0254, longitude: 10.9142 },
+        distance: 0.234
       }
     ];
 
