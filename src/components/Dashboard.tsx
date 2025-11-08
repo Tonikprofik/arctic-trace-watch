@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, CheckCircle2, XCircle, Activity, Map as MapIcon, Brain, Search, Filter, Radio, AlertCircle, Keyboard } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Activity, Map as MapIcon, Brain, Search, Filter, Radio, AlertCircle, Keyboard, BarChart3, Download } from "lucide-react";
 import { queryAgent, approveHitl } from "@/api/api";
 import type { QueryResponse, Trajectory } from "@/types";
 import { toast } from "sonner";
@@ -17,6 +17,9 @@ import { saveQuery, updateQueryApproval } from "@/services/queryHistory";
 import { analyzeThreats } from "@/services/aiAnalysis";
 import { checkSystemHealth, type HealthCheckResponse } from "@/api/health";
 import { KeyboardShortcuts, useKeyboardShortcuts } from "@/components/KeyboardShortcuts";
+import { StatisticsOverlay } from "@/components/StatisticsOverlay";
+import { useRealtimeTelemetry } from "@/hooks/useRealtimeTelemetry";
+import { exportToCSV, exportToJSON, exportAnalysisMarkdown } from "@/services/export";
 
 const Dashboard = () => {
   const [prompt, setPrompt] = useState("");
@@ -30,6 +33,7 @@ const Dashboard = () => {
   const [systemHealth, setSystemHealth] = useState<HealthCheckResponse | null>(null);
   const [checkingHealth, setCheckingHealth] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showStatistics, setShowStatistics] = useState(false);
   
   // Filter and sort state
   const [trajectorySearch, setTrajectorySearch] = useState("");
@@ -37,6 +41,9 @@ const Dashboard = () => {
   const [shipTypeFilter, setShipTypeFilter] = useState<string>("all");
   const [traceSearch, setTraceSearch] = useState("");
   const [liveMode, setLiveMode] = useState(false);
+
+  // Real-time telemetry
+  const { liveVessels, isConnected } = useRealtimeTelemetry(liveMode);
 
   // Refs
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
@@ -88,6 +95,42 @@ const Dashboard = () => {
     onShowHelp: () => setShowShortcuts(prev => !prev),
     onToggleLive: () => setLiveMode(prev => !prev),
   });
+
+  const handleExportCSV = () => {
+    if (!response) return;
+    try {
+      exportToCSV(response.data);
+      toast.success("Exported to CSV");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export failed");
+    }
+  };
+
+  const handleExportJSON = () => {
+    if (!response) return;
+    try {
+      exportToJSON(response);
+      toast.success("Exported to JSON");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export failed");
+    }
+  };
+
+  const handleExportReport = () => {
+    if (!response) return;
+    try {
+      exportAnalysisMarkdown(
+        prompt,
+        response.proposal,
+        aiAnalysis,
+        response.data,
+        response.trace
+      );
+      toast.success("Exported analysis report");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export failed");
+    }
+  };
 
   const performHealthCheck = async () => {
     setCheckingHealth(true);
@@ -322,6 +365,12 @@ const Dashboard = () => {
                   <Keyboard className="h-4 w-4" />
                   <span className="text-xs">?</span>
                 </Button>
+                {liveMode && (
+                  <Badge variant="destructive" className="animate-pulse gap-1">
+                    <Radio className="w-3 h-3" />
+                    LIVE ({liveVessels.length})
+                  </Badge>
+                )}
                 {systemHealth && (
                   <Badge 
                     variant={systemHealth.ready ? "default" : "secondary"}
@@ -707,9 +756,47 @@ const Dashboard = () => {
                   <Filter className="h-5 w-5 text-primary" />
                   Retrieved Trajectories
                 </CardTitle>
-                <Badge variant="secondary" className="font-mono text-xs px-2 py-1 bg-secondary/80 border-border/50">
-                  {filteredAndSortedTrajectories.length} / {response.data.length}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowStatistics(true)}
+                    className="text-xs gap-2"
+                  >
+                    <BarChart3 className="h-3 w-3" />
+                    Statistics
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportCSV}
+                    className="text-xs gap-2"
+                  >
+                    <Download className="h-3 w-3" />
+                    CSV
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportJSON}
+                    className="text-xs gap-2"
+                  >
+                    <Download className="h-3 w-3" />
+                    JSON
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportReport}
+                    className="text-xs gap-2"
+                  >
+                    <Download className="h-3 w-3" />
+                    Report
+                  </Button>
+                  <Badge variant="secondary" className="font-mono text-xs px-2 py-1 bg-secondary/80 border-border/50">
+                    {filteredAndSortedTrajectories.length} / {response.data.length}
+                  </Badge>
+                </div>
               </div>
               <CardDescription className="text-sm">Indexed anomalous maritime trajectories</CardDescription>
             </CardHeader>
@@ -820,6 +907,14 @@ const Dashboard = () => {
           )}
         </div>
       </div>
+
+      {/* Statistics Overlay */}
+      {showStatistics && (
+        <StatisticsOverlay 
+          trajectories={response.data}
+          onClose={() => setShowStatistics(false)}
+        />
+      )}
 
       {/* Keyboard Shortcuts Dialog */}
       <KeyboardShortcuts 
