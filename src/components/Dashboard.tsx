@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, CheckCircle2, XCircle, Activity, Map as MapIcon, Brain, Search, Filter, Radio } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Activity, Map as MapIcon, Brain, Search, Filter, Radio, AlertCircle } from "lucide-react";
 import { queryAgent, approveHitl } from "@/api/api";
 import type { QueryResponse, Trajectory } from "@/types";
 import { toast } from "sonner";
@@ -15,6 +15,7 @@ import TrajectoryMap from "@/components/TrajectoryMap";
 import { LiveProducer } from "@/components/LiveProducer";
 import { saveQuery, updateQueryApproval } from "@/services/queryHistory";
 import { analyzeThreats } from "@/services/aiAnalysis";
+import { checkSystemHealth, type HealthCheckResponse } from "@/api/health";
 
 const Dashboard = () => {
   const [prompt, setPrompt] = useState("");
@@ -25,6 +26,8 @@ const Dashboard = () => {
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [analyzingAI, setAnalyzingAI] = useState(false);
   const [selectedTrajectory, setSelectedTrajectory] = useState<Trajectory | null>(null);
+  const [systemHealth, setSystemHealth] = useState<HealthCheckResponse | null>(null);
+  const [checkingHealth, setCheckingHealth] = useState(false);
   
   // Filter and sort state
   const [trajectorySearch, setTrajectorySearch] = useState("");
@@ -33,9 +36,59 @@ const Dashboard = () => {
   const [traceSearch, setTraceSearch] = useState("");
   const [liveMode, setLiveMode] = useState(false);
 
+  // Check system health on mount
+  useEffect(() => {
+    const performHealthCheck = async () => {
+      try {
+        const health = await checkSystemHealth();
+        setSystemHealth(health);
+        
+        if (!health.ready) {
+          toast.warning("System starting up", {
+            description: health.checks.weaviate.message,
+          });
+        }
+      } catch (err) {
+        console.error("Health check failed:", err);
+      }
+    };
+    
+    performHealthCheck();
+  }, []);
+
+  const performHealthCheck = async () => {
+    setCheckingHealth(true);
+    try {
+      const health = await checkSystemHealth();
+      setSystemHealth(health);
+      
+      if (!health.ready) {
+        toast.warning("System not ready", {
+          description: health.checks.weaviate.message,
+        });
+        return false;
+      }
+      
+      return true;
+    } catch (err) {
+      console.error("Health check failed:", err);
+      toast.error("System health check failed");
+      return false;
+    } finally {
+      setCheckingHealth(false);
+    }
+  };
+
   const handleQuery = async () => {
     if (!prompt.trim()) {
       toast.error("Please enter a query");
+      return;
+    }
+
+    // Check system health before querying
+    const isHealthy = await performHealthCheck();
+    if (!isHealthy) {
+      setError("System not ready. Please wait and try again.");
       return;
     }
 
@@ -226,9 +279,19 @@ const Dashboard = () => {
                   </p>
                 </div>
               </div>
-              <Badge variant="outline" className="font-mono text-xs px-3 py-1 bg-card/50 border-primary/30">
-                Svalbard AIS
-              </Badge>
+              <div className="flex items-center gap-2">
+                {systemHealth && (
+                  <Badge 
+                    variant={systemHealth.ready ? "default" : "secondary"}
+                    className="font-mono text-xs px-3 py-1"
+                  >
+                    {systemHealth.ready ? "● READY" : "○ STARTING"}
+                  </Badge>
+                )}
+                <Badge variant="outline" className="font-mono text-xs px-3 py-1 bg-card/50 border-primary/30">
+                  Svalbard AIS
+                </Badge>
+              </div>
             </div>
           </div>
         </header>
@@ -257,11 +320,16 @@ const Dashboard = () => {
             />
             <Button
               onClick={handleQuery}
-              disabled={loading || !prompt.trim()}
+              disabled={loading || checkingHealth || !prompt.trim()}
               className="w-full font-semibold h-11 shadow-md hover:shadow-xl hover:glow-sm transition-all duration-300"
               size="default"
             >
-              {loading ? (
+              {checkingHealth ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Checking System...
+                </>
+              ) : loading ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Analyzing Intelligence...
@@ -273,6 +341,13 @@ const Dashboard = () => {
                 </>
               )}
             </Button>
+            
+            {systemHealth && !systemHealth.ready && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+                <AlertCircle className="h-4 w-4" />
+                <span>{systemHealth.checks.weaviate.message}</span>
+              </div>
+            )}
           </CardContent>
         </Card>
 
