@@ -69,3 +69,29 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* Leaflet custom styles for dark theme */
+.leaflet-popup-content-wrapper {
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+}
+
+.leaflet-popup-tip {
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+  color: hsl(var(--muted-foreground));
+}
+
+.leaflet-container a.leaflet-popup-close-button:hover {
+  color: hsl(var(--foreground));
+}
+
+.custom-marker {
+  background: transparent;
+  border: none;
+}

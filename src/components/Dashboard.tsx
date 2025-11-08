@@ -3,11 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, XCircle, Activity } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Activity, Map as MapIcon } from "lucide-react";
 import { queryAgent, approveHitl } from "@/api/api";
 import type { QueryResponse, Trajectory } from "@/types";
 import { toast } from "sonner";
 import ActivityFeed from "@/components/ActivityFeed";
+import TrajectoryMap from "@/components/TrajectoryMap";
 import { saveQuery, updateQueryApproval } from "@/services/queryHistory";
 
 const Dashboard = () => {
@@ -15,6 +16,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<QueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showMap, setShowMap] = useState(false);
 
   const handleQuery = async () => {
     if (!prompt.trim()) {
@@ -237,6 +239,38 @@ const Dashboard = () => {
                 </Button>
               </div>
             </CardContent>
+          </Card>
+        )}
+
+        {/* Map Visualization */}
+        {response && response.data.length > 0 && (
+          <Card className="bg-card/50 border-border/50 shadow-lg animate-fade-in">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MapIcon className="h-4 w-4 text-primary" />
+                  <CardTitle className="text-base font-medium">Maritime Visualization</CardTitle>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowMap(!showMap)}
+                  className="text-xs"
+                >
+                  {showMap ? "Hide Map" : "Show Map"}
+                </Button>
+              </div>
+              <CardDescription className="text-xs">
+                Interactive trajectory paths near Svalbard
+              </CardDescription>
+            </CardHeader>
+            {showMap && (
+              <CardContent>
+                <div className="h-[500px] rounded-lg overflow-hidden">
+                  <TrajectoryMap trajectories={response.data} />
+                </div>
+              </CardContent>
+            )}
           </Card>
         )}
 
