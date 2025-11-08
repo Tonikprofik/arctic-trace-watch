@@ -49,8 +49,18 @@ const Dashboard = () => {
     setShipTypeFilter("all");
     setTraceSearch("");
 
+    // Add timeout for slow Weaviate responses
+    const timeoutMs = 30000; // 30 seconds
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Query timeout - backend may be starting up")), timeoutMs)
+    );
+
     try {
-      const result = await queryAgent({ prompt: prompt.trim() });
+      const result = await Promise.race([
+        queryAgent({ prompt: prompt.trim() }),
+        timeoutPromise
+      ]) as QueryResponse;
+      
       setResponse(result);
       
       // Save to database

@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { queryCache } from "../_shared/cache.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,6 +14,19 @@ serve(async (req) => {
   try {
     const { prompt, limit = 5 } = await req.json();
     const startTime = Date.now();
+
+    // Check cache first
+    const cacheKey = queryCache.getCacheKey(prompt, limit);
+    const cached = queryCache.get(cacheKey);
+    if (cached) {
+      console.log("Cache hit for:", { prompt, limit });
+      return new Response(
+        JSON.stringify({ ...cached, fromCache: true }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'HIT' },
+        }
+      );
+    }
 
     console.log("Query received:", { prompt, limit });
 
@@ -102,12 +116,15 @@ serve(async (req) => {
       }
     };
 
+    // Cache the successful response
+    queryCache.set(cacheKey, response);
+
     console.log("Query response:", { traceId, dataCount: resultData.length });
 
     return new Response(
       JSON.stringify(response),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'MISS' },
       }
     );
   } catch (error) {
