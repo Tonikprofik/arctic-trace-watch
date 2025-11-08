@@ -1,174 +1,167 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { queryCache } from "../_shared/cache.ts";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const WEAVIATE_URL = Deno.env.get("WEAVIATE_URL") || "http://localhost:8080";
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const ORIGIN = Deno.env.get("CORS_ALLOW_ORIGIN") || "*";
+
+type QueryBody = { prompt: string; limit?: number; includePaths?: boolean };
+
+function whereFor(prompt: string): string {
+  const p = prompt.toLowerCase();
+  if (p.includes("svalbard") || p.includes("spitsbergen") || p.includes("longyearbyen")) {
+    return `, where: {
+      operator: And
+      operands: [
+        { path: ["anomalyLabel"], operator: Equal, valueBoolean: true }
+        {
+          path: ["centroid"],
+          operator: WithinGeoRange,
+          valueGeoRange: {
+            geoCoordinates: { latitude: 78.2232, longitude: 15.6469 }
+            distance: { max: 250000 }
+          }
+        }
+      ]
+    }`;
+  }
+  return `, where: { path: ["anomalyLabel"], operator: Equal, valueBoolean: true }`;
+}
+
+function fields(includePaths: boolean): string {
+  const base = `mmsi
+    shipType
+    trackLength
+    timeStart
+    timeEnd
+    centroid { latitude longitude }
+    startLocation { latitude longitude }
+    endLocation { latitude longitude }
+    _additional {
+      id
+      distance
+      generate(groupedResult: {
+        task: "You are a maritime C2 analyst. Summarize relevant anomalous trajectories and provide a prioritized, actionable recommendation. Do not invent MMSI or coordinates; state uncertainties."
+      }) {
+        groupedResult
+      }
+    }`;
+  return includePaths ? `${base}\nlat\nlon\ntimestamps\nspeed\ncourse` : base;
+}
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+  const cors = {
+    "Access-Control-Allow-Origin": ORIGIN,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+  
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: cors });
+  }
+  
+  if (req.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405, headers: cors });
   }
 
+  const traceId = crypto.randomUUID();
+  const t0 = performance.now();
+  
   try {
-    const { prompt, limit = 5 } = await req.json();
-    const startTime = Date.now();
-
-    // Check cache first
-    const cacheKey = queryCache.getCacheKey(prompt, limit);
-    const cached = queryCache.get(cacheKey);
-    if (cached) {
-      console.log("Cache hit for:", { prompt, limit });
+    const { prompt, limit = 10, includePaths = false } = (await req.json()) as QueryBody;
+    
+    if (!prompt) {
       return new Response(
-        JSON.stringify({ ...cached, fromCache: true }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'HIT' },
-        }
+        JSON.stringify({ error: "prompt required" }),
+        { status: 400, headers: { ...cors, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("Query received:", { prompt, limit });
-
-    // Simulate XAI reasoning trace
-    const trace = [
-      "RAG: Querying Weaviate...",
-      "GEN: OpenAI summary generated.",
-      "HITL: Formulating proposal for human."
-    ];
-
-    // Mock anomalous trajectory data based on actual Svalbard AIS dataset
-    const mockTrajectories = [
+    const q = `
       {
-        mmsi: 211002340,
-        shipType: "Other",
-        trackLength: 28,
-        timeStart: "2021-06-06T10:26:00Z",
-        timeEnd: "2021-06-06T14:00:00Z",
-        centroid: { latitude: 78.5457, longitude: 12.1909 },
-        startLocation: { latitude: 78.8715, longitude: 8.5102 },
-        endLocation: { latitude: 78.2459, longitude: 15.5016 },
-        distance: 0.156
-      },
-      {
-        mmsi: 211156800,
-        shipType: "Service",
-        trackLength: 45,
-        timeStart: "2021-06-07T08:15:00Z",
-        timeEnd: "2021-06-07T15:30:00Z",
-        centroid: { latitude: 78.6234, longitude: 13.4521 },
-        startLocation: { latitude: 78.5123, longitude: 12.8934 },
-        endLocation: { latitude: 78.7345, longitude: 14.0108 },
-        distance: 0.289
-      },
-      {
-        mmsi: 211202460,
-        shipType: "Service",
-        trackLength: 67,
-        timeStart: "2021-06-08T09:45:00Z",
-        timeEnd: "2021-06-08T16:22:00Z",
-        centroid: { latitude: 78.9521, longitude: 11.2341 },
-        startLocation: { latitude: 78.8234, longitude: 10.9876 },
-        endLocation: { latitude: 79.0808, longitude: 11.4806 },
-        distance: 0.412
-      },
-      {
-        mmsi: 211336220,
-        shipType: "Passenger",
-        trackLength: 89,
-        timeStart: "2021-06-09T11:20:00Z",
-        timeEnd: "2021-06-09T18:45:00Z",
-        centroid: { latitude: 78.4156, longitude: 14.7891 },
-        startLocation: { latitude: 78.3421, longitude: 14.5643 },
-        endLocation: { latitude: 78.4891, longitude: 15.0139 },
-        distance: 0.178
-      },
-      {
-        mmsi: 211627240,
-        shipType: "Service",
-        trackLength: 124,
-        timeStart: "2021-06-10T07:30:00Z",
-        timeEnd: "2021-06-10T14:15:00Z",
-        centroid: { latitude: 79.0312, longitude: 11.0876 },
-        startLocation: { latitude: 79.0300, longitude: 11.0867 },
-        endLocation: { latitude: 79.0254, longitude: 10.9142 },
-        distance: 0.234
+        Get {
+          SEAuAISAnomaly(
+            nearText: { concepts: ["${prompt.replaceAll(`"`, `\\"`)}"] }
+            ${whereFor(prompt)}
+            limit: ${Math.max(1, Math.min(50, limit))}
+          ) { ${fields(includePaths)} }
+        }
       }
-    ];
+    `;
 
-    // Filter based on limit
-    const resultData = mockTrajectories.slice(0, limit);
+    const trace: string[] = ["RAG: Querying Weaviate..."];
+    const tW0 = performance.now();
+    
+    const r = await fetch(`${WEAVIATE_URL}/v1/graphql`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(OPENAI_API_KEY ? { "X-OpenAI-Api-Key": OPENAI_API_KEY } : {}),
+      },
+      body: JSON.stringify({ query: q, variables: null }),
+    });
+    
+    const j = await r.json();
+    const tW1 = performance.now();
+    
+    if (!r.ok) {
+      throw new Error(`Weaviate ${r.status}: ${JSON.stringify(j)}`);
+    }
 
-    // Generate contextual proposal based on prompt
-    const proposal = generateProposal(prompt, resultData);
+    const objs = j?.data?.Get?.SEAuAISAnomaly || [];
+    const gen = objs[0]?._additional?.generate?.groupedResult || "";
+    const proposal = gen || "No relevant anomalous trajectories found.";
 
-    const traceId = crypto.randomUUID();
-    const totalMs = Date.now() - startTime;
+    trace.push("GEN: OpenAI summary generated.");
+    trace.push("HITL: Formulating proposal for human.");
 
-    const response = {
-      proposal,
-      data: resultData,
-      trace,
-      traceId,
-      timings: {
-        totalMs,
-        weaviateMs: Math.floor(totalMs * 0.6)
-      }
-    };
-
-    // Cache the successful response
-    queryCache.set(cacheKey, response);
-
-    console.log("Query response:", { traceId, dataCount: resultData.length });
+    const data = objs.map((o: any) => ({
+      id: o._additional?.id,
+      mmsi: o.mmsi,
+      shipType: o.shipType,
+      trackLength: o.trackLength,
+      timeStart: o.timeStart,
+      timeEnd: o.timeEnd,
+      centroid: o.centroid,
+      startLocation: o.startLocation,
+      endLocation: o.endLocation,
+      distance: o._additional?.distance,
+      ...(includePaths ? {
+        lat: o.lat,
+        lon: o.lon,
+        timestamps: o.timestamps,
+        speed: o.speed,
+        course: o.course,
+      } : {}),
+    }));
 
     return new Response(
-      JSON.stringify(response),
+      JSON.stringify({
+        proposal,
+        data,
+        trace,
+        traceId,
+        timings: {
+          totalMs: performance.now() - t0,
+          weaviateMs: tW1 - tW0,
+        },
+      }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'MISS' },
+        status: 200,
+        headers: {
+          ...cors,
+          "Content-Type": "application/json",
+          "X-Trace-Id": traceId,
+        },
       }
     );
-  } catch (error) {
-    console.error('Error in agent-query function:', error);
+  } catch (e) {
+    console.error("Error in agent-query:", e);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: String(e), traceId }),
       {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...cors, "Content-Type": "application/json" },
       }
     );
   }
 });
-
-function generateProposal(prompt: string, trajectories: any[]): string {
-  const lowerPrompt = prompt.toLowerCase();
-  
-  const vesselCount = trajectories.length;
-  const shipTypes = [...new Set(trajectories.map(t => t.shipType))].join(", ");
-  
-  let proposal = `Based on analysis of ${vesselCount} anomalous trajectories near Svalbard:\n\n`;
-  
-  if (lowerPrompt.includes("threat") || lowerPrompt.includes("danger")) {
-    proposal += `**THREAT ASSESSMENT**: ${vesselCount} vessels exhibiting abnormal patterns detected in restricted Arctic waters.\n\n`;
-    proposal += `**KEY INDICATORS**:\n`;
-    proposal += `- Ship types involved: ${shipTypes}\n`;
-    proposal += `- Pattern deviations detected in movement and timing\n`;
-    proposal += `- Proximity to sensitive maritime zones\n\n`;
-    proposal += `**RECOMMENDATION**: Initiate enhanced monitoring protocol. Cross-reference vessel registrations with maritime authority databases. Consider deploying patrol assets for visual confirmation if patterns persist.`;
-  } else if (lowerPrompt.includes("fishing") || lowerPrompt.includes("fish")) {
-    const fishingVessels = trajectories.filter(t => t.shipType === "Fishing");
-    proposal += `**FISHING ACTIVITY ANALYSIS**: ${fishingVessels.length} fishing vessels with anomalous behavior patterns.\n\n`;
-    proposal += `**OBSERVATIONS**:\n`;
-    proposal += `- Unusual track patterns may indicate IUU (Illegal, Unreported, Unregulated) fishing activity\n`;
-    proposal += `- Trajectories deviate from normal fishing ground patterns\n\n`;
-    proposal += `**RECOMMENDATION**: Verify fishing permits and quotas. Monitor for repeated patterns indicating organized activity. Coordinate with fisheries enforcement.`;
-  } else {
-    proposal += `**ANOMALY SUMMARY**: Multiple vessels showing atypical movement patterns in Svalbard maritime zone.\n\n`;
-    proposal += `**VESSEL BREAKDOWN**:\n`;
-    trajectories.forEach((t, i) => {
-      proposal += `- Vessel ${i + 1} (MMSI: ${t.mmsi}): ${t.shipType}, ${t.trackLength} track points\n`;
-    });
-    proposal += `\n**RECOMMENDATION**: Continue observation. Document patterns for baseline comparison. Flag for follow-up if behaviors escalate or persist beyond 48 hours.`;
-  }
-  
-  return proposal;
-}
